@@ -1,12 +1,11 @@
-# Copyright 2026 Ivan Moreno Mendoza
+﻿# Copyright 2026 Iván Moreno Mendoza
 # SPDX-License-Identifier: Apache-2.0
 # Sets up WSL 2 + hints for Docker so the full MUN Devkit GUI can run on
 # Windows (Snapdragon X Elite / ARM64, or x86-64). Run in an elevated
 # PowerShell from the repo root:
 #   powershell -ExecutionPolicy Bypass -File .\scripts\windows\Install-MdkGui.ps1
 #
-# ASCII-only on purpose: Windows PowerShell 5.1 mis-parses UTF-8 scripts
-# without a BOM when they contain non-ASCII punctuation.
+# Saved as UTF-8 with BOM so Windows PowerShell 5.1 parses non-ASCII text.
 
 $ErrorActionPreference = "Stop"
 
