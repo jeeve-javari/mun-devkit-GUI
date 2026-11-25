@@ -49,6 +49,16 @@ class GuiRunner(unittest.TestCase):
             {"state": "absent", "name": "container runtime", "detail": "no"},
         ])
         self.assertIn("Docker Desktop", next_setup_step(docker_next))
+        # Doctor used to omit "container runtime ok" when the engine answered;
+        # SDK environment "not built" still means Docker works.
+        inferred = readiness_from_doctor([
+            {"state": "ok", "name": "Python", "detail": "3"},
+            {"state": "ok", "name": "MUN OS tools", "detail": "x"},
+            {"state": "not built", "name": "SDK environment", "detail": "run mdk env build"},
+        ])
+        self.assertTrue(inferred["docker"])
+        self.assertFalse(inferred["sdk_env"])
+        self.assertIn("Build SDK environment", next_setup_step(inferred))
 
     def test_gui_entry_points_exist(self):
         self.assertTrue((ROOT / "mdk-gui").is_file())

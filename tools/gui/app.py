@@ -165,7 +165,9 @@ class MdkGui(tk.Tk):
     def _build_setup(self) -> None:
         ttk.Label(
             self.setup_tab,
-            text="Do these once on this computer. The banner above always says the next thing to press.",
+            text=("Do these once on this computer. The banner above always says the next thing to press.\n"
+                  "Why Docker? MUN games are Linux ARM64 programs; Build / Pack / Simulate run inside a "
+                  "container so your Windows PC can compile and run them. Docker is that container engine."),
             style="Dim.TLabel",
             wraplength=720,
         ).pack(anchor="w", pady=(0, 10))
@@ -194,10 +196,10 @@ class MdkGui(tk.Tk):
 
         ttk.Label(
             self.setup_tab,
-            text=("Docker Desktop can be running in Windows and still invisible to this app. "
-                  "Press 3. Diagnose Docker for a plain-English report. Typical fix: in Docker Desktop "
-                  "WSL integration, enable the Ubuntu row (scroll down), Apply & Restart, then in "
-                  "PowerShell run: wsl --shutdown — then reopen this app and press Check again."),
+            text=("If the table already shows SDK environment as “not built”, Docker is working — "
+                  "press 4. Build SDK environment. If Docker still needs attention, press 3. Diagnose "
+                  "Docker. Typical fix: Docker Desktop → Settings → Resources → WSL integration → "
+                  "Ubuntu ON → Apply & Restart, then in PowerShell: wsl --shutdown, reopen this app."),
             style="Dim.TLabel",
             wraplength=720,
         ).pack(anchor="w", pady=(0, 8))
@@ -410,10 +412,31 @@ class MdkGui(tk.Tk):
             )
         return advice + "\n\n" + report
 
+    def _show_scroll_text(self, title: str, text: str) -> None:
+        """messagebox truncates long diagnose output; keep the full report readable."""
+        win = tk.Toplevel(self)
+        win.title(title)
+        win.geometry("720x520")
+        win.configure(bg=COLORS["bg"])
+        frame = ttk.Frame(win, padding=12)
+        frame.pack(fill="both", expand=True)
+        body = tk.Text(frame, wrap="word", height=24, font=self._fonts["mono"],
+                       bg=COLORS["bg_sunken"], fg=COLORS["text"], relief="flat", padx=8, pady=8)
+        scroll = ttk.Scrollbar(frame, command=body.yview)
+        body.configure(yscrollcommand=scroll.set)
+        body.pack(side="left", fill="both", expand=True)
+        scroll.pack(side="right", fill="y")
+        body.insert("1.0", text)
+        body.configure(state="disabled")
+        ttk.Button(win, text="OK", command=win.destroy).pack(pady=(0, 12))
+        win.transient(self)
+        win.grab_set()
+        win.focus_set()
+
     def _docker_help(self) -> None:
         text = self._docker_help_text()
         self._append_log("\n" + text)
-        messagebox.showinfo("Diagnose Docker", text)
+        self._show_scroll_text("Diagnose Docker", text)
         if not self._ready.get("docker") and not _windows_docker_desktop_present():
             if messagebox.askyesno("Docker help", "Open the Docker Desktop download page?"):
                 if not open_url(DOCKER_HELP_URL):

@@ -67,6 +67,8 @@ def cmd_doctor(args) -> int:
     else:
         try:
             built = container.image_exists()
+            # Always name the runtime when it answers: the GUI checklist keys off this row.
+            rows.append(("ok", "container runtime", "docker (needed for `mdk build`)"))
             rows.append(("ok" if built else "not built", "SDK environment",
                          container.image_tag() + ("" if built else "; run `mdk env build` (needed for `mdk build`)")))
         except MdkError as exc:      # installed and not answering: nothing to build, something to start

@@ -157,9 +157,17 @@ def readiness_from_doctor(rows: List[dict]) -> dict:
     by_name = {row["name"]: row for row in rows}
     python_ok = by_name.get("Python", {}).get("state") == "ok"
     mun_os_ok = by_name.get("MUN OS tools", {}).get("state") in ("ok", "differs")
-    docker_ok = by_name.get("container runtime", {}).get("state") == "ok"
+    runtime_state = by_name.get("container runtime", {}).get("state")
     env_row = by_name.get("SDK environment", {})
     env_state = env_row.get("state", "absent")
+    # Prefer an explicit runtime row. Older doctor builds omitted "container
+    # runtime ok" when the engine answered and only printed SDK environment.
+    if runtime_state == "ok":
+        docker_ok = True
+    elif runtime_state in ("absent", "stopped"):
+        docker_ok = False
+    else:
+        docker_ok = env_state in ("ok", "not built")
     env_ok = env_state == "ok"
     env_built = env_state not in ("absent", "not built", "MISSING")
     return {
