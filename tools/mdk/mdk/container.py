@@ -28,22 +28,71 @@ def image_tag() -> str:
     return "mun-devkit-env:" + hashlib.sha256(DOCKERFILE.read_bytes()).hexdigest()[:12]
 
 
+def _looks_like_docker(path: Path) -> bool:
+    name = path.name.lower()
+    return name in ("docker", "docker.exe") and path.is_file()
+
+
+def _docker_from_windows_where() -> List[str]:
+    """Ask Windows where docker is (works from WSL when Docker Desktop added it to PATH)."""
+    found: List[str] = []
+    try:
+        done = subprocess.run(  # nosec B603, B607: fixed argv; asks Windows where docker is
+            ["cmd.exe", "/c", "where", "docker"],
+            capture_output=True, text=True, check=False, timeout=15)
+    except (OSError, subprocess.TimeoutExpired):
+        return found
+    if done.returncode != 0:
+        return found
+    for line in done.stdout.splitlines():
+        win = line.strip()
+        if not win:
+            continue
+        # C:\Program Files\... -> /mnt/c/Program Files/...
+        if len(win) >= 3 and win[1] == ":" and win[2] in ("\\", "/"):
+            drive = win[0].lower()
+            rest = win[3:].replace("\\", "/")
+            unix = f"/mnt/{drive}/{rest}"
+            if _looks_like_docker(Path(unix)):
+                found.append(unix)
+            found.append(win)  # docker.exe can be started with the Windows path from WSL
+    return found
+
+
+def _docker_under_program_files() -> List[str]:
+    """Scan common Docker Desktop install folders on the Windows drive."""
+    found: List[str] = []
+    roots = [
+        Path("/mnt/c/Program Files/Docker"),
+        Path("/mnt/c/Program Files (x86)/Docker"),
+        Path.home() / "AppData/Local/Docker",
+        Path("/mnt/c/Users") / Path.home().name / "AppData/Local/Docker",
+    ]
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for pattern in ("**/resources/bin/docker.exe", "**/resources/bin/docker", "**/docker.exe"):
+            for path in root.glob(pattern):
+                if _looks_like_docker(path):
+                    found.append(str(path))
+    return found
+
+
 def _docker_candidates() -> List[str]:
-    """Where `docker` may live: PATH first, then Docker Desktop's Windows bind from WSL."""
+    """Where `docker` may live: PATH, Windows where.exe, then Docker Desktop folders."""
     found: List[str] = []
     for name in ("docker", "docker.exe"):
         path = shutil.which(name)
         if path:
             found.append(path)
-    # Docker Desktop on Windows, visible from WSL even before the distro integration
-    # puts `docker` on PATH. Prefer these only when PATH had nothing.
+    found += _docker_from_windows_where()
+    found += _docker_under_program_files()
     for rel in (
         "/mnt/c/Program Files/Docker/Docker/resources/bin/docker",
         "/mnt/c/Program Files/Docker/Docker/resources/bin/docker.exe",
     ):
-        if Path(rel).is_file():
+        if _looks_like_docker(Path(rel)):
             found.append(rel)
-    # Deduplicate while keeping order.
     seen = set()
     ordered: List[str] = []
     for path in found:
@@ -53,14 +102,54 @@ def _docker_candidates() -> List[str]:
     return ordered
 
 
+def diagnose_docker() -> str:
+    """Plain text for the GUI: what this computer can see about Docker."""
+    lines = ["Docker diagnose:"]
+    which_docker = shutil.which("docker")
+    which_exe = shutil.which("docker.exe")
+    lines.append(f"  PATH docker:      {which_docker or '(not found)'}")
+    lines.append(f"  PATH docker.exe:  {which_exe or '(not found)'}")
+    sock = Path("/var/run/docker.sock")
+    lines.append(f"  docker.sock:      {'yes' if sock.exists() else 'no'} ({sock})")
+    desktop = Path("/mnt/c/Program Files/Docker/Docker/Docker Desktop.exe")
+    lines.append(f"  Docker Desktop.exe: {'yes' if desktop.is_file() else 'no'} ({desktop})")
+    candidates = _docker_candidates()
+    lines.append(f"  candidates:       {len(candidates)}")
+    for path in candidates[:8]:
+        lines.append(f"    - {path}")
+    if candidates:
+        try:
+            done = subprocess.run(  # nosec B603: docker by a path we just found; fixed subcommand
+                [candidates[0], "info", "--format", "{{.ServerVersion}}"],
+                capture_output=True, text=True, check=False, timeout=20)
+            if done.returncode == 0:
+                lines.append(f"  docker info:      ok (server {done.stdout.strip() or 'unknown'})")
+            else:
+                err = (done.stderr or done.stdout or "").strip().splitlines()
+                lines.append("  docker info:      failed")
+                if err:
+                    lines.append(f"    {err[0][:200]}")
+                lines.append("  tip: open Docker Desktop and wait until it says Engine running,")
+                lines.append("       then in PowerShell: wsl --shutdown   and reopen this app.")
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            lines.append(f"  docker info:      could not start ({exc})")
+    else:
+        lines.append("  docker info:      skipped (no docker binary found)")
+        lines.append("  tip: Docker Desktop Settings -> Resources -> WSL integration:")
+        lines.append("       enable your Ubuntu distro by name (not only 'default'), Apply & Restart,")
+        lines.append("       then: wsl --shutdown   and reopen this app.")
+    return "\n".join(lines)
+
+
 def docker() -> str:
     candidates = _docker_candidates()
     if candidates:
         return candidates[0]
     remedy = (
         "Install Docker Desktop (or another runtime that runs linux/arm64). "
-        "On Windows: install Docker Desktop, turn on WSL integration for your Ubuntu distro, "
-        "leave Docker Desktop running, then try again. "
+        "On Windows: install Docker Desktop, turn on WSL integration for your Ubuntu distro "
+        "(enable the Ubuntu row, not only 'default'), leave Docker Desktop running, "
+        "run `wsl --shutdown` in PowerShell, reopen this app, then try again. "
         "On an ARM64 computer containers run natively; elsewhere they are emulated and slow."
     )
     raise MdkError("E-ENV-DOCKER", "No container runtime found (docker).", remedy)

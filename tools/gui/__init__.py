@@ -3,4 +3,4 @@
 
 """Friendly desktop front-end for the MUN Devkit host tool."""
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
