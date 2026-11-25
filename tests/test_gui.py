@@ -4,7 +4,6 @@
 
 import sys
 import unittest
-from pathlib import Path
 
 from support import ROOT
 

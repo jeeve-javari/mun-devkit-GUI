@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import subprocess  # nosec B404: opens a folder with a fixed argv, or starts nothing else
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -255,16 +256,12 @@ class MdkGui(tk.Tk):
         try:
             system = self.tk.call("tk", "windowingsystem")
             if system == "win32":
-                import os
-                os.startfile(path)  # type: ignore[attr-defined]
+                opener = ["explorer", str(path)]
             elif system == "aqua":
-                import subprocess
-                subprocess.Popen(  # nosec B603, B607: no shell; opens the project folder only
-                    ["open", str(path)])
+                opener = ["open", str(path)]
             else:
-                import subprocess
-                subprocess.Popen(  # nosec B603, B607: no shell; opens the project folder only
-                    ["xdg-open", str(path)])
+                opener = ["xdg-open", str(path)]
+            subprocess.Popen(opener)  # nosec B603: no shell; opens the project folder only
         except OSError as exc:
             messagebox.showerror("Project", str(exc))
 

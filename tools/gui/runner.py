@@ -82,9 +82,13 @@ class CommandRunner:
                 return
             with self._lock:
                 self._proc = proc
-            assert proc.stdout is not None
+            out = proc.stdout
+            if out is None:
+                self.on_line("Could not read mdk output.")
+                self.on_done(RunResult(command=command, returncode=proc.wait() or 1))
+                return
             try:
-                for line in proc.stdout:
+                for line in out:
                     self.on_line(line.rstrip("\n"))
                 returncode = proc.wait()
             except Exception as exc:  # unexpected reader failure: still finish cleanly
