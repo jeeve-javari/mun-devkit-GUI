@@ -150,3 +150,39 @@ def parse_doctor(text: str) -> List[dict]:
             name, detail = parts[0], (parts[1] if len(parts) > 1 else "")
         rows.append({"state": state, "name": name, "detail": detail})
     return rows
+
+
+def readiness_from_doctor(rows: List[dict]) -> dict:
+    """Plain-language readiness for the Setup checklist."""
+    by_name = {row["name"]: row for row in rows}
+    python_ok = by_name.get("Python", {}).get("state") == "ok"
+    mun_os_ok = by_name.get("MUN OS tools", {}).get("state") in ("ok", "differs")
+    docker_ok = by_name.get("container runtime", {}).get("state") == "ok"
+    env_row = by_name.get("SDK environment", {})
+    env_state = env_row.get("state", "absent")
+    env_ok = env_state == "ok"
+    env_built = env_state not in ("absent", "not built", "MISSING")
+    return {
+        "python": python_ok,
+        "mun_os": mun_os_ok,
+        "docker": docker_ok,
+        "sdk_env": env_ok,
+        "sdk_env_present": env_built or env_ok,
+        "can_build": python_ok and mun_os_ok and docker_ok,
+        "ready": python_ok and mun_os_ok and docker_ok and env_ok,
+        "rows": rows,
+    }
+
+
+def next_setup_step(ready: dict) -> str:
+    """One sentence telling the user what to do next."""
+    if not ready.get("python"):
+        return "Install Python 3.9 or later, then press Check again."
+    if not ready.get("mun_os"):
+        return "Next: press Get MUN OS tools (one-time download)."
+    if not ready.get("docker"):
+        return ("Next: install Docker Desktop, turn on WSL integration, "
+                "then press Check again. Build and Simulate need Docker.")
+    if not ready.get("sdk_env"):
+        return "Next: press Build SDK environment (one-time; needs the network)."
+    return "Setup looks good. Open the Project tab to build a game."
