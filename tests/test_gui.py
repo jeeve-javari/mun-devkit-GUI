@@ -68,3 +68,10 @@ class GuiHelp(unittest.TestCase):
             capture_output=True, text=True, cwd=str(ROOT))
         self.assertEqual(done.returncode, 0)
         self.assertIn("gui", done.stdout)
+
+    def test_diagnose_docker_runs(self):
+        from mdk.container import diagnose_docker
+
+        text = diagnose_docker()
+        self.assertIn("Docker diagnose:", text)
+        self.assertIn("PATH docker:", text)
