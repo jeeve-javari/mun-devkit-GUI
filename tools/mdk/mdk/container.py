@@ -59,15 +59,35 @@ def _docker_from_windows_where() -> List[str]:
     return found
 
 
+def _windows_user_names() -> List[str]:
+    """Windows account folders under /mnt/c/Users (WSL home name may differ)."""
+    names = []
+    users = Path("/mnt/c/Users")
+    if users.is_dir():
+        for entry in users.iterdir():
+            if entry.is_dir() and entry.name not in ("Public", "Default", "Default User", "All Users"):
+                names.append(entry.name)
+    # Also try the WSL username when it matches a Windows profile.
+    home_name = Path.home().name
+    if home_name and home_name not in names:
+        names.append(home_name)
+    return names
+
+
 def _docker_under_program_files() -> List[str]:
-    """Scan common Docker Desktop install folders on the Windows drive."""
+    """Scan Docker Desktop folders: all-users Program Files and per-user LocalAppData."""
     found: List[str] = []
     roots = [
         Path("/mnt/c/Program Files/Docker"),
         Path("/mnt/c/Program Files (x86)/Docker"),
         Path.home() / "AppData/Local/Docker",
-        Path("/mnt/c/Users") / Path.home().name / "AppData/Local/Docker",
+        Path.home() / "AppData/Local/Programs/DockerDesktop",
+        Path.home() / "AppData/Local/Programs/Docker",
     ]
+    for user in _windows_user_names():
+        roots.append(Path(f"/mnt/c/Users/{user}/AppData/Local/Programs/DockerDesktop"))
+        roots.append(Path(f"/mnt/c/Users/{user}/AppData/Local/Programs/Docker"))
+        roots.append(Path(f"/mnt/c/Users/{user}/AppData/Local/Docker"))
     for root in roots:
         if not root.is_dir():
             continue
@@ -111,8 +131,27 @@ def diagnose_docker() -> str:
     lines.append(f"  PATH docker.exe:  {which_exe or '(not found)'}")
     sock = Path("/var/run/docker.sock")
     lines.append(f"  docker.sock:      {'yes' if sock.exists() else 'no'} ({sock})")
-    desktop = Path("/mnt/c/Program Files/Docker/Docker/Docker Desktop.exe")
-    lines.append(f"  Docker Desktop.exe: {'yes' if desktop.is_file() else 'no'} ({desktop})")
+    desktop_hits = []
+    for user in _windows_user_names():
+        for rel in (
+            f"/mnt/c/Users/{user}/AppData/Local/Programs/DockerDesktop/Docker Desktop.exe",
+            f"/mnt/c/Users/{user}/AppData/Local/Programs/Docker/Docker/Docker Desktop.exe",
+        ):
+            if Path(rel).is_file():
+                desktop_hits.append(rel)
+    for rel in (
+        "/mnt/c/Program Files/Docker/Docker/Docker Desktop.exe",
+        "/mnt/c/Program Files (x86)/Docker/Docker/Docker Desktop.exe",
+    ):
+        if Path(rel).is_file():
+            desktop_hits.append(rel)
+    if desktop_hits:
+        lines.append("  Docker Desktop.exe: yes")
+        for hit in desktop_hits[:4]:
+            lines.append(f"    - {hit}")
+    else:
+        lines.append("  Docker Desktop.exe: no (checked Program Files and LocalAppData\\Programs)")
+        lines.append("  tip: per-user installs live under %LOCALAPPDATA%\\Programs\\DockerDesktop")
     candidates = _docker_candidates()
     lines.append(f"  candidates:       {len(candidates)}")
     for path in candidates[:8]:

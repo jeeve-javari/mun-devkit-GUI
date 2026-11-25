@@ -21,16 +21,16 @@ if errorlevel 1 (
   exit /b 1
 )
 
-REM Put Docker Desktop's CLI on PATH inside WSL when the Windows install exists.
-wsl -e bash -lc "set -e; cd \"$(wslpath -a '%REPO%')\"; export PATH=\"/mnt/c/Program Files/Docker/Docker/resources/bin:/mnt/c/Program Files/Docker/Docker/resources/bin:$PATH\"; if ! python3 -c 'import tkinter' 2>/dev/null; then echo 'Installing Python Tk in WSL (one-time)...'; sudo apt-get update -qq && sudo apt-get install -y -qq python3 python3-tk git make; fi; chmod +x mdk-gui mdk 2>/dev/null || true; exec ./mdk-gui"
+REM Include all-users and per-user Docker Desktop CLI paths inside WSL.
+wsl -e bash -lc "set -e; cd \"$(wslpath -a '%REPO%')\"; WINUSER=\"$(cmd.exe /c echo %USERNAME% 2>/dev/null | tr -d '\r')\"; export PATH=\"/mnt/c/Program Files/Docker/Docker/resources/bin:/mnt/c/Users/${WINUSER}/AppData/Local/Programs/DockerDesktop/resources/bin:/mnt/c/Users/${WINUSER}/AppData/Local/Programs/Docker/Docker/resources/bin:$PATH\"; if ! python3 -c 'import tkinter' 2>/dev/null; then echo 'Installing Python Tk in WSL (one-time)...'; sudo apt-get update -qq && sudo apt-get install -y -qq python3 python3-tk git make; fi; chmod +x mdk-gui mdk 2>/dev/null || true; exec ./mdk-gui"
 set "ERR=%ERRORLEVEL%"
 if not "%ERR%"=="0" (
   echo.
   echo The GUI did not stay open (exit %ERR%).
   echo Tips:
-  echo   - Docker Desktop: Settings - Resources - WSL integration - enable Ubuntu, then wsl --shutdown
-  echo   - Use Windows 11 so WSLg can show Linux windows
-  echo   - In Ubuntu:  sudo apt install -y python3-tk
+  echo   - Run scripts\windows\Fix-DockerInWsl.ps1 from PowerShell
+  echo   - Docker Desktop for ARM: docs.docker.com desktop windows-install
+  echo   - Inside Ubuntu test with: docker version   (not wsl -e ...)
   echo.
   pause
 )
