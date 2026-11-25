@@ -99,7 +99,12 @@ def _docker_under_program_files() -> List[str]:
 
 
 def _docker_candidates() -> List[str]:
-    """Where `docker` may live: PATH, Windows where.exe, then Docker Desktop folders."""
+    """Where `docker` may live: PATH, Windows where.exe, then Docker Desktop folders.
+
+    Linux-native paths (WSL integration) are preferred over `/mnt/c/...` Windows
+    binaries: the Windows CLI can be on PATH from the launcher yet fail to talk
+    to the engine from inside Ubuntu.
+    """
     found: List[str] = []
     for name in ("docker", "docker.exe"):
         path = shutil.which(name)
@@ -119,7 +124,13 @@ def _docker_candidates() -> List[str]:
         if path not in seen:
             seen.add(path)
             ordered.append(path)
-    return ordered
+
+    def rank(path: str) -> tuple:
+        lower = path.replace("\\", "/").lower()
+        windows_side = lower.startswith("/mnt/") or (len(path) >= 2 and path[1] == ":")
+        return (1 if windows_side else 0, ordered.index(path))
+
+    return sorted(ordered, key=rank)
 
 
 def diagnose_docker() -> str:
@@ -157,21 +168,30 @@ def diagnose_docker() -> str:
     for path in candidates[:8]:
         lines.append(f"    - {path}")
     if candidates:
-        try:
-            done = subprocess.run(  # nosec B603: docker by a path we just found; fixed subcommand
-                [candidates[0], "info", "--format", "{{.ServerVersion}}"],
-                capture_output=True, text=True, check=False, timeout=20)
+        answered = None
+        last_err = ""
+        for path in candidates[:6]:
+            try:
+                done = subprocess.run(  # nosec B603: docker by a path we just found; fixed subcommand
+                    [path, "info", "--format", "{{.ServerVersion}}"],
+                    capture_output=True, text=True, check=False, timeout=8)
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                last_err = str(exc)
+                continue
             if done.returncode == 0:
-                lines.append(f"  docker info:      ok (server {done.stdout.strip() or 'unknown'})")
-            else:
-                err = (done.stderr or done.stdout or "").strip().splitlines()
-                lines.append("  docker info:      failed")
-                if err:
-                    lines.append(f"    {err[0][:200]}")
-                lines.append("  tip: open Docker Desktop and wait until it says Engine running,")
-                lines.append("       then in PowerShell: wsl --shutdown   and reopen this app.")
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            lines.append(f"  docker info:      could not start ({exc})")
+                answered = path
+                lines.append(f"  docker info:      ok via {path}")
+                lines.append(f"                 server {done.stdout.strip() or 'unknown'}")
+                break
+            err = (done.stderr or done.stdout or "").strip().splitlines()
+            if err:
+                last_err = err[0][:200]
+        if answered is None:
+            lines.append("  docker info:      failed for every candidate")
+            if last_err:
+                lines.append(f"    {last_err}")
+            lines.append("  tip: open Docker Desktop and wait until it says Engine running,")
+            lines.append("       then in PowerShell: wsl --shutdown   and reopen this app.")
     else:
         lines.append("  docker info:      skipped (no docker binary found)")
         lines.append("  tip: Docker Desktop Settings -> Resources -> WSL integration:")
@@ -180,8 +200,23 @@ def diagnose_docker() -> str:
     return "\n".join(lines)
 
 
+def _docker_answers(path: str) -> bool:
+    """True when this docker binary can talk to a running engine."""
+    try:
+        done = subprocess.run(  # nosec B603: docker by a candidate path; fixed subcommand
+            [path, "info", "--format", "{{.ServerVersion}}"],
+            capture_output=True, check=False, timeout=8)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return done.returncode == 0
+
+
 def docker() -> str:
+    """Prefer a docker that answers; Windows paths on PATH can exist but fail in WSL."""
     candidates = _docker_candidates()
+    for path in candidates:
+        if _docker_answers(path):
+            return path
     if candidates:
         return candidates[0]
     remedy = (
@@ -196,9 +231,10 @@ def docker() -> str:
 
 def running() -> bool:
     """Whether the container runtime answers: installed is not running."""
-    done = subprocess.run(  # nosec B603: docker by the full path which() found; a fixed subcommand
-        [docker(), "info", "--format", "{{.ServerVersion}}"], capture_output=True, check=False)
-    return done.returncode == 0
+    try:
+        return _docker_answers(docker())
+    except MdkError:
+        return False
 
 
 def image_exists() -> bool:
