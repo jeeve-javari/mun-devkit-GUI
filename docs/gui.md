@@ -49,6 +49,11 @@ Desktop**.
 Then in the window use **Setup** until doctor is green, open **Project**, and
 follow the same journey as the README.
 
+If the black console flashes and closes: run the launcher from PowerShell so the
+error stays on screen (`.\scripts\windows\Launch-MdkGui.bat`). A copy of the
+log is also written to `%TEMP%\mun-devkit-launch.log`. Most often Tk is missing
+(`sudo apt install -y python3-tk` in Ubuntu) or WSLg needs `wsl --update`.
+
 ## Downloadable release
 
 A GitHub Release can attach a zip of this tree (source + GUI entry points +

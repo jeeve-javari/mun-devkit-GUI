@@ -50,6 +50,12 @@ camino es **WSL 2 + Docker Desktop**.
 Luego, en la ventana, usa **Setup** hasta que doctor esté en verde, abre **Project** y
 sigue el mismo recorrido que el README.
 
+Si la consola negra parpadea y se cierra: ejecuta el lanzador desde PowerShell
+para que el error se quede en pantalla (`.\scripts\windows\Launch-MdkGui.bat`).
+También se escribe una copia del registro en `%TEMP%\mun-devkit-launch.log`.
+Lo más habitual es que falte Tk (`sudo apt install -y python3-tk` en Ubuntu)
+o que WSLg necesite `wsl --update`.
+
 ## Descarga
 
 Una Release de GitHub puede adjuntar un zip de este árbol (código + puntos de

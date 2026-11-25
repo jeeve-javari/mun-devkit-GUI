@@ -6,10 +6,14 @@ setlocal EnableExtensions
 title MUN Devkit
 set "REPO=%~dp0..\.."
 for %%I in ("%REPO%") do set "REPO=%%~fI"
+set "LOG=%TEMP%\mun-devkit-launch.log"
 
 echo.
 echo  MUN Devkit
 echo  Starting the GUI window...
+echo  If this closes instantly, re-open from a PowerShell window so you can read the error:
+echo    cd /d "%REPO%"
+echo    .\scripts\windows\Launch-MdkGui.bat
 echo.
 
 where wsl >nul 2>&1
@@ -21,17 +25,58 @@ if errorlevel 1 (
   exit /b 1
 )
 
-REM Include all-users and per-user Docker Desktop CLI paths inside WSL.
-wsl -e bash -lc "set -e; cd \"$(wslpath -a '%REPO%')\"; WINUSER=\"$(cmd.exe /c echo %USERNAME% 2>/dev/null | tr -d '\r')\"; export PATH=\"/mnt/c/Program Files/Docker/Docker/resources/bin:/mnt/c/Users/${WINUSER}/AppData/Local/Programs/DockerDesktop/resources/bin:/mnt/c/Users/${WINUSER}/AppData/Local/Programs/Docker/Docker/resources/bin:$PATH\"; if ! python3 -c 'import tkinter' 2>/dev/null; then echo 'Installing Python Tk in WSL (one-time)...'; sudo apt-get update -qq && sudo apt-get install -y -qq python3 python3-tk git make; fi; chmod +x mdk-gui mdk 2>/dev/null || true; exec ./mdk-gui"
-set "ERR=%ERRORLEVEL%"
-if not "%ERR%"=="0" (
-  echo.
-  echo The GUI did not stay open (exit %ERR%).
-  echo Tips:
-  echo   - Run scripts\windows\Fix-DockerInWsl.ps1 from PowerShell
-  echo   - Docker Desktop for ARM: docs.docker.com desktop windows-install
-  echo   - Inside Ubuntu test with: docker version   (not wsl -e ...)
+if not exist "%REPO%\mdk-gui" (
+  echo Could not find mdk-gui in:
+  echo   %REPO%
+  echo Pull the latest repo, or run Install-MdkGui.ps1 from the mun-devkit-GUI folder.
   echo.
   pause
+  exit /b 1
+)
+
+if not exist "%REPO%\scripts\windows\launch-mdk-gui-wsl.sh" (
+  echo Missing launch-mdk-gui-wsl.sh. Run: git pull
+  echo.
+  pause
+  exit /b 1
+)
+
+REM Resolve the Windows path once; avoid a fragile one-line bash -lc string.
+set "REPO_WSL="
+for /f "usebackq delims=" %%i in (`wsl wslpath -a "%REPO%" 2^>nul`) do set "REPO_WSL=%%i"
+if not defined REPO_WSL (
+  echo Could not map this folder into WSL:
+  echo   %REPO%
+  echo Open Ubuntu and check that WSL starts, then try again.
+  echo.
+  pause
+  exit /b 1
+)
+
+echo  WSL path: %REPO_WSL%
+echo  Log file: %LOG%
+echo.
+
+wsl -e bash "%REPO_WSL%/scripts/windows/launch-mdk-gui-wsl.sh"
+set "ERR=%ERRORLEVEL%"
+
+if not "%ERR%"=="0" (
+  echo.
+  echo The GUI did not stay open ^(exit %ERR%^).
+  echo.
+  echo Full log:
+  if exist "%LOG%" (
+    type "%LOG%"
+  ) else (
+    echo   ^(no log written yet — WSL may have failed before the script started^)
+  )
+  echo.
+  echo Tips:
+  echo   1. Open Ubuntu and run:  sudo apt update ^&^& sudo apt install -y python3 python3-tk
+  echo   2. In PowerShell:  wsl --update
+  echo   3. Then run this launcher again from PowerShell ^(so the window stays open^).
+  echo.
+  pause
+  exit /b %ERR%
 )
 endlocal
