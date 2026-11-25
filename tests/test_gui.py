@@ -56,6 +56,7 @@ class GuiRunner(unittest.TestCase):
         self.assertTrue((ROOT / "tools" / "gui" / "app.py").is_file())
         self.assertTrue((ROOT / "docs" / "gui.md").is_file())
         self.assertTrue((ROOT / "scripts" / "windows" / "Launch-MdkGui.bat").is_file())
+        self.assertTrue((ROOT / "scripts" / "windows" / "launch-mdk-gui-wsl.sh").is_file())
         self.assertTrue((ROOT / "scripts" / "windows" / "Install-MdkGui.ps1").is_file())
 
 

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import subprocess  # nosec B404: opens a folder or a help URL with a fixed argv
+import sys
 import tkinter as tk
 import webbrowser
 from pathlib import Path
@@ -618,6 +619,15 @@ class MdkGui(tk.Tk):
 
 def main(argv: Optional[List[str]] = None) -> int:
     del argv  # reserved for future flags
-    app = MdkGui()
+    try:
+        app = MdkGui()
+    except tk.TclError as exc:
+        print("MUN Devkit could not open a window.", file=sys.stderr)
+        print(f"  {exc}", file=sys.stderr)
+        print("On Windows 11, WSLg draws the GUI. Try in PowerShell:", file=sys.stderr)
+        print("  wsl --update", file=sys.stderr)
+        print("  wsl --shutdown", file=sys.stderr)
+        print("Then open MUN Devkit again.", file=sys.stderr)
+        return 1
     app.mainloop()
     return 0
