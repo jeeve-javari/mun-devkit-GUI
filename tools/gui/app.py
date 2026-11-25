@@ -5,12 +5,13 @@
 
 from __future__ import annotations
 
+import re
 import subprocess  # nosec B404: opens a folder or a help URL with a fixed argv
 import sys
 import tkinter as tk
 import webbrowser
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import List, Optional
 
 from . import __version__
@@ -80,7 +81,9 @@ class MdkGui(tk.Tk):
         self._ready = readiness_from_doctor([])
         self._refresh_after = False
         self._pending_doctor = False
+        self._pending_project_dir: Optional[str] = None
         self._last_args: List[str] = []
+        self._run_log: List[str] = []
 
         self.title("MUN Devkit")
         self.geometry("980x720")
@@ -227,25 +230,42 @@ class MdkGui(tk.Tk):
         path_row.pack(fill="x", pady=(0, 8))
         ttk.Label(path_row, text="Project folder").pack(side="left")
         ttk.Entry(path_row, textvariable=self.project_dir).pack(side="left", fill="x", expand=True, padx=8)
-        ttk.Button(path_row, text="Browse…", command=self._browse_project).pack(side="left")
+        ttk.Button(path_row, text="Browse…", command=self._browse_project).pack(side="left", padx=(0, 4))
+        ttk.Button(path_row, text="New folder…", command=self._new_folder).pack(side="left")
 
         new_box = ttk.LabelFrame(self.project_tab, text="New project from the sample", padding=10)
         new_box.pack(fill="x", pady=(0, 12))
         self.new_name = tk.StringVar(value="star-well")
         self.new_title = tk.StringVar(value="Star Well")
         self.new_id = tk.StringVar(value="org.example.star-well")
+        self.new_parent = tk.StringVar(value=str(self._default_projects_parent()))
         grid = ttk.Frame(new_box)
         grid.pack(fill="x")
         for col, (label, var) in enumerate((
             ("Name", self.new_name),
             ("Title", self.new_title),
-            ("Card id", self.new_id),
+            ("Card id (lowercase)", self.new_id),
         )):
             cell = ttk.Frame(grid)
             cell.grid(row=0, column=col, sticky="ew", padx=(0 if col == 0 else 8, 0))
             ttk.Label(cell, text=label, style="Dim.TLabel").pack(anchor="w")
             ttk.Entry(cell, textvariable=var).pack(fill="x")
             grid.columnconfigure(col, weight=1)
+        parent_row = ttk.Frame(new_box)
+        parent_row.pack(fill="x", pady=(10, 0))
+        ttk.Label(parent_row, text="Create inside", style="Dim.TLabel").pack(anchor="w")
+        parent_pick = ttk.Frame(new_box)
+        parent_pick.pack(fill="x", pady=(2, 0))
+        ttk.Entry(parent_pick, textvariable=self.new_parent).pack(side="left", fill="x", expand=True)
+        ttk.Button(parent_pick, text="Browse…", command=self._browse_new_parent).pack(side="left", padx=(8, 4))
+        ttk.Button(parent_pick, text="New folder…",
+                   command=lambda: self._new_folder(into=self.new_parent)).pack(side="left")
+        ttk.Label(
+            new_box,
+            text="Creates a new folder named after the project inside that location. Card id must be lowercase.",
+            style="Dim.TLabel",
+            wraplength=700,
+        ).pack(anchor="w", pady=(8, 0))
         ttk.Button(new_box, text="Create project", style="Accent.TButton",
                    command=self._new_project).pack(anchor="w", pady=(10, 0))
 
@@ -458,15 +478,92 @@ class MdkGui(tk.Tk):
 
     # --- project actions ---------------------------------------------------------
 
+    def _default_projects_parent(self) -> Path:
+        """Prefer Windows Documents\\MUN Projects when the repo lives under /mnt/c."""
+        candidates: List[Path] = []
+        parts = self.devkit.resolve().parts
+        if "Users" in parts:
+            idx = parts.index("Users")
+            if idx + 1 < len(parts):
+                candidates.append(Path("/mnt/c/Users") / parts[idx + 1] / "Documents")
+        users = Path("/mnt/c/Users")
+        if users.is_dir():
+            for entry in users.iterdir():
+                if entry.is_dir() and entry.name not in ("Public", "Default", "Default User", "All Users"):
+                    candidates.append(entry / "Documents")
+        for docs in candidates:
+            if not docs.is_dir():
+                continue
+            mun = docs / "MUN Projects"
+            try:
+                mun.mkdir(exist_ok=True)
+                return mun
+            except OSError:
+                return docs
+        home = Path.home() / "mun-projects"
+        try:
+            home.mkdir(exist_ok=True)
+        except OSError:
+            return Path.home()
+        return home
+
     def _browse_project(self) -> None:
-        chosen = filedialog.askdirectory(initialdir=self.project_dir.get() or str(self.devkit))
+        initial = self.project_dir.get() or str(self._default_projects_parent())
+        chosen = filedialog.askdirectory(title="Open an existing project folder",
+                                         initialdir=initial, mustexist=True)
         if chosen:
             self.project_dir.set(chosen)
+
+    def _browse_new_parent(self) -> None:
+        initial = self.new_parent.get() or str(self._default_projects_parent())
+        chosen = filedialog.askdirectory(title="Create the project inside this folder",
+                                         initialdir=initial, mustexist=True)
+        if chosen:
+            self.new_parent.set(chosen)
+
+    def _new_folder(self, into: Optional[tk.StringVar] = None) -> None:
+        """Create a folder on disk (Tk's directory picker cannot)."""
+        if into is not None:
+            start = into.get() or str(self._default_projects_parent())
+        else:
+            start = self.project_dir.get() or str(self._default_projects_parent())
+        parent = filedialog.askdirectory(title="Create a new folder inside…",
+                                         initialdir=start, mustexist=True)
+        if not parent:
+            return
+        name = simpledialog.askstring(
+            "New folder",
+            "Folder name:",
+            parent=self,
+            initialvalue=self.new_name.get().strip() or "my-game")
+        if not name:
+            return
+        name = name.strip()
+        if not name or "/" in name or "\\" in name or name in (".", ".."):
+            messagebox.showerror("New folder", "Use a plain folder name (no slashes).")
+            return
+        path = Path(parent) / name
+        try:
+            path.mkdir(parents=False, exist_ok=False)
+        except FileExistsError:
+            messagebox.showerror("New folder", f"Already exists:\n{path}")
+            return
+        except OSError as exc:
+            messagebox.showerror("New folder", f"Could not create folder:\n{exc}")
+            return
+        if into is not None:
+            into.set(str(path))
+        else:
+            self.project_dir.set(str(path))
+        messagebox.showinfo("New folder", f"Created:\n{path}")
 
     def _open_folder(self) -> None:
         path = Path(self.project_dir.get())
         if not path.is_dir():
-            messagebox.showerror("Project", f"Not a folder:\n{path}")
+            messagebox.showerror(
+                "Project",
+                f"That folder does not exist yet:\n{path}\n\n"
+                "Use New folder… or Create project first, or Browse… to an existing project.")
             return
         try:
             system = self.tk.call("tk", "windowingsystem")
@@ -475,7 +572,14 @@ class MdkGui(tk.Tk):
             elif system == "aqua":
                 opener = ["open", str(path)]
             else:
-                opener = ["xdg-open", str(path)]
+                # From WSL, prefer Windows Explorer for /mnt/c paths.
+                win = path.as_posix()
+                if win.startswith("/mnt/") and len(win) > 6 and win[5] == "/":
+                    drive = win[5].upper()
+                    rest = win[7:].replace("/", "\\")
+                    opener = ["explorer.exe", f"{drive}:\\{rest}"]
+                else:
+                    opener = ["xdg-open", str(path)]
             subprocess.Popen(opener)  # nosec B603: no shell; opens the project folder only
         except OSError as exc:
             messagebox.showerror("Project", str(exc))
@@ -485,16 +589,43 @@ class MdkGui(tk.Tk):
         if not name:
             messagebox.showerror("New project", "Give the project a name.")
             return
-        parent = filedialog.askdirectory(title="Where should the project be created?",
-                                         initialdir=str(Path.home()))
-        if not parent:
+        if not re.fullmatch(r"[a-z][a-z0-9-]{1,39}", name):
+            messagebox.showerror(
+                "New project",
+                "Name must be 2–40 characters: lowercase letters, digits or '-', "
+                "starting with a letter.\nExample: tails-from-alteria")
             return
-        target = Path(parent) / name
-        args = ["new", name, "--directory", str(target), "--title", self.new_title.get().strip() or name]
         card_id = self.new_id.get().strip()
         if card_id:
+            lowered = card_id.lower()
+            if lowered != card_id:
+                self.new_id.set(lowered)
+                card_id = lowered
+            if not re.fullmatch(r"[a-z0-9._-]{3,64}", card_id):
+                messagebox.showerror(
+                    "New project",
+                    "Card id must be 3–64 characters: lowercase letters, digits, "
+                    "'.', '-' or '_'.\nExample: org.example.tails-from-alteria")
+                return
+        parent = Path(self.new_parent.get().strip() or str(self._default_projects_parent()))
+        if not parent.is_dir():
+            try:
+                parent.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                messagebox.showerror("New project", f"Cannot use parent folder:\n{parent}\n\n{exc}")
+                return
+        target = parent / name
+        if target.exists() and (not target.is_dir() or any(target.iterdir())):
+            messagebox.showerror(
+                "New project",
+                f"Already exists and is not empty:\n{target}\n\n"
+                "Pick another name, or Browse… to a different Create inside folder.")
+            return
+        title = self.new_title.get().strip() or name
+        args = ["new", name, "--directory", str(target), "--title", title]
+        if card_id:
             args += ["--id", card_id]
-        self.project_dir.set(str(target))
+        self._pending_project_dir = str(target)
         self._run(args)
 
     def _project_args(self) -> List[str]:
@@ -517,6 +648,13 @@ class MdkGui(tk.Tk):
         if verb[0] in ("build", "pack") and not self._ensure_can_build():
             return
         path = Path(self.project_dir.get())
+        if not path.is_dir():
+            messagebox.showerror(
+                "Project",
+                f"That folder does not exist yet:\n{path}\n\n"
+                "Create project first, or Browse… to an existing project "
+                "(for example samples/hello-mun).")
+            return
         if not (path / "mun-project.toml").is_file():
             messagebox.showerror("Project", f"No mun-project.toml in:\n{path}")
             return
@@ -549,8 +687,11 @@ class MdkGui(tk.Tk):
         self._capture_doctor = capture_for_doctor
         self._pending_doctor = capture_for_doctor
         self._last_args = list(args)
+        self._run_log = []
         if capture_for_doctor:
             self._doctor_cache = ""
+        if args[:1] != ["new"]:
+            self._pending_project_dir = None
         shown = " ".join(["mdk", *args])
         self._append_log(f"\n> {shown}")
         self.status.set("Working...")
@@ -566,13 +707,15 @@ class MdkGui(tk.Tk):
         self.log.configure(state="disabled")
 
     def _on_line(self, line: str) -> None:
-        self.after(0, lambda: self._append_log(line))
+        self._run_log.append(line)
+        self.after(0, lambda text=line: self._append_log(text))
         if getattr(self, "_capture_doctor", False):
             self._doctor_cache += line + "\n"
 
     def _on_done(self, result: RunResult) -> None:
         def finish() -> None:
             was_doctor = self._pending_doctor
+            pending_project = self._pending_project_dir
             if getattr(self, "_capture_doctor", False):
                 self._fill_doctor(self._doctor_cache)
                 self._capture_doctor = False
@@ -580,9 +723,17 @@ class MdkGui(tk.Tk):
             if result.cancelled:
                 self.status.set("Stopped")
                 self._append_log("(stopped)")
+                self._pending_project_dir = None
             elif result.returncode == 0:
                 self.status.set("Done")
                 self._append_log("(ok)")
+                if pending_project:
+                    self.project_dir.set(pending_project)
+                    self._pending_project_dir = None
+                    messagebox.showinfo(
+                        "Project created",
+                        f"Created:\n{pending_project}\n\n"
+                        "Next: press Build on this tab.")
             elif was_doctor:
                 # doctor exits 1 when something is missing — expected during setup
                 self.status.set("Checked")
@@ -590,6 +741,7 @@ class MdkGui(tk.Tk):
             else:
                 self.status.set("Needs attention")
                 self._append_log(f"(could not finish - code {result.returncode})")
+                self._pending_project_dir = None
                 self._explain_failure(result)
             if self._refresh_after and result.returncode == 0 and not result.cancelled:
                 self._refresh_after = False
@@ -600,7 +752,7 @@ class MdkGui(tk.Tk):
 
     def _explain_failure(self, result: RunResult) -> None:
         joined = " ".join(self._last_args)
-        log_text = self.log.get("1.0", "end")
+        log_text = "\n".join(self._run_log) + "\n" + self.log.get("1.0", "end")
         if "E-ENV-DOCKER" in log_text or "No container runtime found" in log_text:
             self._docker_help()
             return
@@ -612,10 +764,19 @@ class MdkGui(tk.Tk):
             self.notebook.select(self.setup_tab)
             return
         if result.returncode not in (0, 2):
-            messagebox.showinfo(
-                "Something went wrong",
-                f"The step '{joined}' did not finish.\n\n"
-                "Read the Details log below - it has the same message mdk prints.")
+            detail_lines = [line for line in self._run_log if line.strip()]
+            # Prefer the mdk error code line when present.
+            interesting = [line for line in detail_lines
+                           if line.startswith("E-") or "error" in line.lower()
+                           or "cannot" in line.lower() or "not valid" in line.lower()]
+            snippet = "\n".join((interesting or detail_lines)[-8:])
+            message = f"The step '{joined}' did not finish."
+            if snippet:
+                message += f"\n\n{snippet}"
+            if "E-CARD-ID" in log_text or "card.id" in log_text:
+                message += ("\n\nCard id must be lowercase "
+                            "(example: org.example.tails-from-alteria).")
+            messagebox.showerror("Something went wrong", message)
 
     def _fill_doctor(self, text: str) -> None:
         for item in self.doctor_tree.get_children():
