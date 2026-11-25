@@ -38,14 +38,16 @@ Desktop**.
 | Windows on ARM (Snapdragon X Elite and similar) | WSL 2 is ARM64; `linux/arm64` containers run natively — the same happy path as Linux ARM64 / Apple Silicon |
 | Windows x86-64 | Docker emulates `linux/arm64` (slower); cards and checks are the same |
 
-1. In elevated PowerShell: `scripts\windows\Install-MdkGui.ps1`
-2. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and enable WSL integration
-3. In WSL: `sudo apt update && sudo apt install -y python3 python3-tk git make`
-4. Keep the repository under the Linux filesystem (`~/…`), not only under `/mnt/c`
-5. Start the GUI with `./mdk-gui` in WSL, or `scripts\windows\Launch-MdkGui.bat` from Explorer
+1. In elevated PowerShell, from the repo folder:
+   `powershell -ExecutionPolicy Bypass -File .\scripts\windows\Install-MdkGui.ps1`
+   That installs Tk in WSL when it can, puts **MUN Devkit** on your Desktop,
+   and tries to open the window.
+2. Or double-click **`MUN Devkit.bat`** in the repo root (same launcher).
+3. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and
+   enable WSL integration when you want to build / pack / simulate for the console.
 
-Then use **Setup** until doctor is green, open **Project**, and follow the
-same journey as the README.
+Then in the window use **Setup** until doctor is green, open **Project**, and
+follow the same journey as the README.
 
 ## Downloadable release
 

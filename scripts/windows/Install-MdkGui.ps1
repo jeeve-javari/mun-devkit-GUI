@@ -1,16 +1,20 @@
 ﻿# Copyright 2026 Iván Moreno Mendoza
 # SPDX-License-Identifier: Apache-2.0
-# Sets up WSL 2 + hints for Docker so the full MUN Devkit GUI can run on
-# Windows (Snapdragon X Elite / ARM64, or x86-64). Run in an elevated
-# PowerShell from the repo root:
+# Sets up WSL 2, installs GUI deps in Ubuntu when possible, and puts a
+# "MUN Devkit" shortcut on your Desktop so you can open the app by double-click.
+# Run from the repo root in elevated PowerShell:
 #   powershell -ExecutionPolicy Bypass -File .\scripts\windows\Install-MdkGui.ps1
 #
 # Saved as UTF-8 with BOM so Windows PowerShell 5.1 parses non-ASCII text.
 
 $ErrorActionPreference = "Stop"
 
+$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$Launcher = Join-Path $RepoRoot "MUN Devkit.bat"
+
 Write-Host "MUN Devkit - Windows setup" -ForegroundColor Cyan
-Write-Host "The console build targets linux/arm64. On Windows the supported path is WSL 2 + Docker."
+Write-Host "This installs a Desktop shortcut that opens the GUI app."
+Write-Host "Builds still use WSL 2 + Docker under the hood (linux/arm64)."
 Write-Host ""
 
 $arch = (Get-CimInstance Win32_ComputerSystem).SystemType
@@ -28,18 +32,41 @@ $wsl = Get-Command wsl -ErrorAction SilentlyContinue
 if (-not $wsl) {
     Write-Host "Installing WSL 2 (may reboot)..." -ForegroundColor Yellow
     wsl --install
-    Write-Host "After reboot, re-run this script, then install Docker Desktop and enable WSL integration."
+    Write-Host "After reboot, re-run this script."
     exit 0
 }
 
 Write-Host "WSL is present. Distros:"
 wsl --list --verbose
 Write-Host ""
-Write-Host "Next steps:"
-Write-Host "  1. Install Docker Desktop for Windows and turn on WSL integration for your distro."
-Write-Host "  2. In WSL: sudo apt update && sudo apt install -y python3 python3-tk git make"
-Write-Host "  3. Clone or open this repository inside WSL (under your Linux home, not only /mnt/c)."
-Write-Host "  4. Run:  ./mdk-gui     or double-click scripts/windows/Launch-MdkGui.bat"
-Write-Host "  5. In the GUI: Setup -> Check this computer -> Fetch MUN OS tools -> Build SDK environment"
+
+# Best-effort: install Python + Tk inside the default distro so the window can open.
+Write-Host "Installing Python + Tk inside WSL (may ask for your Linux password)..." -ForegroundColor Yellow
+try {
+    wsl -e bash -lc "sudo apt-get update -qq && sudo apt-get install -y -qq python3 python3-tk git make"
+} catch {
+    Write-Host "Could not install packages automatically. You can run this later in Ubuntu:"
+    Write-Host "  sudo apt update && sudo apt install -y python3 python3-tk git make"
+}
+
+# Desktop shortcut that double-clicks like a normal app.
+$Desktop = [Environment]::GetFolderPath("Desktop")
+$ShortcutPath = Join-Path $Desktop "MUN Devkit.lnk"
+$shell = New-Object -ComObject WScript.Shell
+$shortcut = $shell.CreateShortcut($ShortcutPath)
+$shortcut.TargetPath = $Launcher
+$shortcut.WorkingDirectory = $RepoRoot
+$shortcut.WindowStyle = 1
+$shortcut.Description = "Open the MUN Devkit GUI"
+$shortcut.Save()
+Write-Host ""
+Write-Host "Created Desktop shortcut: $ShortcutPath" -ForegroundColor Green
+Write-Host "Also double-clickable in the repo: $Launcher" -ForegroundColor Green
+Write-Host ""
+Write-Host "Still needed for building games (not just opening the window):"
+Write-Host "  - Docker Desktop for Windows, with WSL integration enabled for Ubuntu"
+Write-Host ""
+Write-Host "Opening the GUI now..."
+Start-Process -FilePath $Launcher
 Write-Host ""
 Write-Host "Docs: docs/gui.md"

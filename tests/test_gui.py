@@ -35,6 +35,7 @@ class GuiRunner(unittest.TestCase):
 
     def test_gui_entry_points_exist(self):
         self.assertTrue((ROOT / "mdk-gui").is_file())
+        self.assertTrue((ROOT / "MUN Devkit.bat").is_file())
         self.assertTrue((ROOT / "tools" / "gui" / "app.py").is_file())
         self.assertTrue((ROOT / "docs" / "gui.md").is_file())
         self.assertTrue((ROOT / "scripts" / "windows" / "Launch-MdkGui.bat").is_file())
