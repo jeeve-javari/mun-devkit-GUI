@@ -181,8 +181,8 @@ def next_setup_step(ready: dict) -> str:
     if not ready.get("mun_os"):
         return "Next: press Get MUN OS tools (one-time download)."
     if not ready.get("docker"):
-        return ("Next: install Docker Desktop, turn on WSL integration, "
-                "then press Check again. Build and Simulate need Docker.")
+        return ("Next: finish Docker Desktop setup (WSL integration on for Ubuntu), "
+                "leave Docker running, then press 1. Check again.")
     if not ready.get("sdk_env"):
         return "Next: press Build SDK environment (one-time; needs the network)."
     return "Setup looks good. Open the Project tab to build a game."

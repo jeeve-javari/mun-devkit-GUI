@@ -28,13 +28,42 @@ def image_tag() -> str:
     return "mun-devkit-env:" + hashlib.sha256(DOCKERFILE.read_bytes()).hexdigest()[:12]
 
 
+def _docker_candidates() -> List[str]:
+    """Where `docker` may live: PATH first, then Docker Desktop's Windows bind from WSL."""
+    found: List[str] = []
+    for name in ("docker", "docker.exe"):
+        path = shutil.which(name)
+        if path:
+            found.append(path)
+    # Docker Desktop on Windows, visible from WSL even before the distro integration
+    # puts `docker` on PATH. Prefer these only when PATH had nothing.
+    for rel in (
+        "/mnt/c/Program Files/Docker/Docker/resources/bin/docker",
+        "/mnt/c/Program Files/Docker/Docker/resources/bin/docker.exe",
+    ):
+        if Path(rel).is_file():
+            found.append(rel)
+    # Deduplicate while keeping order.
+    seen = set()
+    ordered: List[str] = []
+    for path in found:
+        if path not in seen:
+            seen.add(path)
+            ordered.append(path)
+    return ordered
+
+
 def docker() -> str:
-    found = shutil.which("docker")
-    if not found:
-        raise MdkError("E-ENV-DOCKER", "No container runtime found (docker).",
-                       "Install one that runs linux/arm64 containers. On an ARM64 computer they run natively; "
-                       "elsewhere they are emulated and slow.")
-    return found
+    candidates = _docker_candidates()
+    if candidates:
+        return candidates[0]
+    remedy = (
+        "Install Docker Desktop (or another runtime that runs linux/arm64). "
+        "On Windows: install Docker Desktop, turn on WSL integration for your Ubuntu distro, "
+        "leave Docker Desktop running, then try again. "
+        "On an ARM64 computer containers run natively; elsewhere they are emulated and slow."
+    )
+    raise MdkError("E-ENV-DOCKER", "No container runtime found (docker).", remedy)
 
 
 def running() -> bool:

@@ -24,17 +24,34 @@ from .runner import (
 from .theme import COLORS, FONTS, pick_font
 
 DOCKER_HELP_URL = "https://docs.docker.com/desktop/setup/install/windows-install/"
-DOCKER_HELP_TEXT = (
-    "Building a MUN game needs Docker (a tool that runs Linux ARM64 build boxes).\n\n"
-    "On Windows:\n"
-    "  1. Install Docker Desktop from docker.com\n"
-    "  2. Open Docker Desktop → Settings → Resources → WSL integration\n"
-    "     and turn it on for your Ubuntu distro\n"
-    "  3. Leave Docker Desktop running\n"
-    "  4. Come back here and press Check again\n\n"
-    "On Snapdragon X Elite, containers run natively once Docker is installed.\n"
-    "On x86 PCs they are emulated and slower, but they still work."
-)
+
+
+def _windows_docker_desktop_present() -> bool:
+    """True when Docker Desktop's files are on the Windows side (seen from WSL)."""
+    return any(Path(p).is_file() for p in (
+        "/mnt/c/Program Files/Docker/Docker/Docker Desktop.exe",
+        "/mnt/c/Program Files/Docker/Docker/resources/bin/docker.exe",
+        "/mnt/c/Program Files/Docker/Docker/resources/bin/docker",
+    ))
+
+
+def open_url(url: str) -> bool:
+    """Open a URL in the host browser. From WSL, webbrowser often does nothing."""
+    attempts = [
+        ["cmd.exe", "/c", "start", "", url],
+        ["powershell.exe", "-NoProfile", "-Command", f"Start-Process '{url}'"],
+        ["xdg-open", url],
+        ["open", url],
+    ]
+    for command in attempts:
+        try:
+            done = subprocess.run(  # nosec B603: fixed argv; opens a https URL only
+                command, capture_output=True, check=False, timeout=10)
+            if done.returncode == 0:
+                return True
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+    return bool(webbrowser.open(url))
 
 
 class MdkGui(tk.Tk):
@@ -149,10 +166,11 @@ class MdkGui(tk.Tk):
 
         actions = ttk.Frame(self.setup_tab)
         actions.pack(fill="x", pady=(0, 8))
-        self.btn_check = ttk.Button(actions, text="1. Check", command=self.refresh_doctor)
-        self.btn_fetch = ttk.Button(actions, text="2. Get MUN OS tools", style="Accent.TButton",
+        self.btn_check = ttk.Button(actions, text="1. Check again", style="Accent.TButton",
+                                    command=self.refresh_doctor)
+        self.btn_fetch = ttk.Button(actions, text="2. Get MUN OS tools",
                                     command=self._fetch_os)
-        self.btn_docker = ttk.Button(actions, text="3. How to install Docker",
+        self.btn_docker = ttk.Button(actions, text="3. Docker help",
                                      command=self._docker_help)
         self.btn_env = ttk.Button(actions, text="4. Build SDK environment",
                                   command=self._build_env)
@@ -161,8 +179,9 @@ class MdkGui(tk.Tk):
 
         ttk.Label(
             self.setup_tab,
-            text=("Windows tip: keep Docker Desktop running. This app already runs through WSL — "
-                  "you do not need a separate Linux window."),
+            text=("There is no Install Docker button inside this app — Docker Desktop is a separate "
+                  "Windows installer. After you install it: open Docker Desktop, enable WSL integration "
+                  "for Ubuntu, leave it running, then press 1. Check again."),
             style="Dim.TLabel",
             wraplength=720,
         ).pack(anchor="w", pady=(0, 8))
@@ -304,8 +323,14 @@ class MdkGui(tk.Tk):
                    "3.9+ is installed." if ready["python"] else "Install Python 3.9 or later.")
         self._mark(self.chk_mun_os, "MUN OS tools", ready["mun_os"],
                    "Fetched." if ready["mun_os"] else "Press Get MUN OS tools.")
-        self._mark(self.chk_docker, "Docker", ready["docker"],
-                   "Found." if ready["docker"] else "Install Docker Desktop + WSL integration.")
+        if ready["docker"]:
+            docker_detail = "Found."
+        elif _windows_docker_desktop_present():
+            docker_detail = ("Docker Desktop is on Windows, but this app cannot use it yet. "
+                             "Turn on WSL integration for Ubuntu, leave Docker running, press Check again.")
+        else:
+            docker_detail = "Install Docker Desktop, enable WSL integration, then press Check again."
+        self._mark(self.chk_docker, "Docker", ready["docker"], docker_detail)
         self._mark(self.chk_env, "SDK environment", ready["sdk_env"],
                    "Built." if ready["sdk_env"] else "Press Build SDK environment after Docker works.")
 
@@ -318,13 +343,17 @@ class MdkGui(tk.Tk):
 
         if can_build:
             self.project_gate.configure(
-                text="Setup looks good. Create or open a project, then Build → Check → Pack.",
+                text="Setup looks good. Create or open a project, then Build -> Check -> Pack.",
                 style="Ok.TLabel")
             self.sim_gate.configure(
                 text="After a successful Build, simulate a session here.",
                 style="Ok.TLabel")
         elif not ready["docker"]:
-            msg = "Docker is missing — Build and Simulate stay locked until Docker Desktop is installed."
+            if _windows_docker_desktop_present():
+                msg = ("Docker Desktop is installed, but WSL cannot see it yet. "
+                       "Enable WSL integration, restart Docker Desktop, then press 1. Check again.")
+            else:
+                msg = "Docker is missing - Build and Simulate stay locked until Docker Desktop works in WSL."
             self.project_gate.configure(text=msg, style="Bad.TLabel")
             self.sim_gate.configure(text=msg, style="Bad.TLabel")
         else:
@@ -332,9 +361,47 @@ class MdkGui(tk.Tk):
             self.project_gate.configure(text=msg, style="Bad.TLabel")
             self.sim_gate.configure(text=msg, style="Bad.TLabel")
 
+    def _docker_help_text(self) -> str:
+        if self._ready.get("docker"):
+            return ("Docker is already available here.\n\n"
+                    "Press 4. Build SDK environment next.")
+        if _windows_docker_desktop_present():
+            return (
+                "Docker Desktop is installed on Windows, but this app (running in WSL) "
+                "still cannot see it.\n\n"
+                "Do this:\n"
+                "  1. Open Docker Desktop (whale icon in the tray)\n"
+                "  2. Settings -> Resources -> WSL integration\n"
+                "  3. Turn on integration for Ubuntu\n"
+                "  4. Apply & Restart\n"
+                "  5. Come back here and press 1. Check again\n\n"
+                "If it still fails: in PowerShell run  wsl --shutdown  then reopen this app."
+            )
+        return (
+            "This app cannot install Docker for you - Docker Desktop is a separate Windows program.\n\n"
+            "After you download it:\n"
+            "  1. Run the Docker Desktop installer\n"
+            "  2. Open Docker Desktop -> Settings -> Resources -> WSL integration\n"
+            "     and turn it on for Ubuntu\n"
+            "  3. Leave Docker Desktop running\n"
+            "  4. Press 1. Check again in this window\n\n"
+            "On Snapdragon X Elite, containers run natively once that works."
+        )
+
     def _docker_help(self) -> None:
-        if messagebox.askyesno("Install Docker Desktop", DOCKER_HELP_TEXT + "\n\nOpen the download page now?"):
-            webbrowser.open(DOCKER_HELP_URL)
+        text = self._docker_help_text()
+        if self._ready.get("docker"):
+            messagebox.showinfo("Docker", text)
+            return
+        if _windows_docker_desktop_present():
+            messagebox.showinfo("Docker Desktop needs WSL integration", text)
+            return
+        if messagebox.askyesno("Docker help", text + "\n\nOpen the Docker Desktop download page in your browser?"):
+            if not open_url(DOCKER_HELP_URL):
+                messagebox.showinfo(
+                    "Open this link yourself",
+                    "Could not open a browser from WSL.\n\nPaste this into Edge or Chrome:\n"
+                    + DOCKER_HELP_URL)
 
     def _fetch_os(self) -> None:
         self._refresh_after = True
