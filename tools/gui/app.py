@@ -32,11 +32,20 @@ def _windows_docker_desktop_present() -> bool:
         Path("/mnt/c/Program Files/Docker"),
         Path("/mnt/c/Program Files (x86)/Docker"),
     ]
+    users = Path("/mnt/c/Users")
+    if users.is_dir():
+        for entry in users.iterdir():
+            if entry.is_dir():
+                roots.append(entry / "AppData/Local/Programs/DockerDesktop")
+                roots.append(entry / "AppData/Local/Programs/Docker")
     for root in roots:
         if not root.is_dir():
             continue
-        if any(root.rglob("Docker Desktop.exe")) or any(root.rglob("docker.exe")):
-            return True
+        try:
+            if any(root.rglob("Docker Desktop.exe")) or any(root.rglob("docker.exe")):
+                return True
+        except OSError:
+            continue
     return False
 
 
@@ -382,14 +391,21 @@ class MdkGui(tk.Tk):
         else:
             advice = (
                 "Docker is still not usable from this app.\n\n"
-                "Do these in order:\n"
-                "  1. Docker Desktop -> Settings -> Resources -> WSL integration\n"
-                "  2. Turn ON 'Enable integration with my default WSL distro'\n"
-                "  3. Scroll down and turn ON the switch next to Ubuntu (by name)\n"
-                "  4. Apply & Restart, wait until Engine running\n"
-                "  5. Close this MUN Devkit window\n"
-                "  6. In PowerShell:  wsl --shutdown\n"
-                "  7. Reopen MUN Devkit and press 1. Check again\n"
+                "Important:\n"
+                "  - Run helper scripts from Windows PowerShell, not from Ubuntu.\n"
+                "  - Inside Ubuntu type:  docker version\n"
+                "    (never type: wsl -e docker ... inside Ubuntu)\n"
+                "  - Per-user Docker installs under:\n"
+                "    %LOCALAPPDATA%\\Programs\\DockerDesktop\n"
+                "    not only C:\\Program Files\\Docker\n"
+                "  - On Snapdragon, use Docker Desktop for Windows - Arm.\n\n"
+                "Then:\n"
+                "  1. Open Docker Desktop -> Settings -> Resources -> WSL integration\n"
+                "  2. Default ON, and Ubuntu (by name) ON\n"
+                "  3. Apply & Restart\n"
+                "  4. Close this app; in PowerShell: wsl --shutdown\n"
+                "  5. Reopen MUN Devkit and press 1. Check again\n"
+                "  6. Or run: scripts\\windows\\Fix-DockerInWsl.ps1\n"
             )
         return advice + "\n\n" + report
 
