@@ -1,0 +1,51 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
+# Attach a downloadable zip of the full Devkit (CLI + GUI + Windows helpers)
+# when a version tag is pushed. Building games still needs Docker (and on
+# Windows, WSL 2) as docs/gui.md explains.
+name: GUI release package
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build source package
+        run: |
+          set -euo pipefail
+          name="mun-devkit-gui-${GITHUB_REF_NAME:-manual}"
+          mkdir -p dist
+          git archive --format=tar --prefix="${name}/" HEAD | tar -x -C dist
+          # Ensure Unix entry points are marked executable inside the zip.
+          chmod +x "dist/${name}/mdk" "dist/${name}/mdk-gui"
+          (cd dist && zip -r "${name}.zip" "${name}")
+          echo "ASSET=dist/${name}.zip" >> "$GITHUB_ENV"
+          echo "ASSET_NAME=${name}.zip" >> "$GITHUB_ENV"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mun-devkit-gui-zip
+          path: ${{ env.ASSET }}
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ASSET }}
+          generate_release_notes: true
+          body: |
+            Downloadable package of the full MUN Devkit with the friendly GUI.
+
+            - Unzip, then on macOS/Linux run `./mdk-gui` (needs Python 3.9+ and Tk).
+            - On Windows (ARM or x86): run `scripts/windows/Install-MdkGui.ps1`, install Docker Desktop with WSL 2, then `Launch-MdkGui.bat` or `./mdk-gui` inside WSL.
+            - Complete **Setup** in the GUI once (`doctor` → `os fetch` → `env build`).
+
+            See `docs/gui.md`. Building for the console still needs a `linux/arm64` container runtime.

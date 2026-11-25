@@ -45,7 +45,10 @@ analyse:
 doctor:
 	$(MDK) doctor
 
+gui:
+	$(PYTHON) mdk-gui
+
 clean:
 	$(MAKE) -C samples/hello-mun clean
 
-.PHONY: check check-full sample env dev-tools analyse doctor clean
+.PHONY: check check-full sample env dev-tools analyse doctor gui clean

@@ -75,6 +75,22 @@ documentos dicen que solo se han medido en máquinas virtuales.
 
 `./mdk doctor` comprueba cada cosa y dice qué hacer con la que falte.
 
+### Interfaz gráfica amigable
+
+¿Prefieres botones a la terminal? El mismo recorrido está en una ventana de
+escritorio:
+
+```sh
+./mdk-gui
+# or
+./mdk gui
+```
+
+Setup, proyecto nuevo, compilar, comprobar, empaquetar y simular llaman a
+`mdk` con los mismos argumentos que la CLI. En Windows (Snapdragon X Elite /
+ARM, o x86) el camino soportado es WSL 2 + Docker; véase
+[docs/gui.md](docs/gui.md).
+
 ## De nada a una partida guardada
 
 ```sh
@@ -275,8 +291,11 @@ Compila `mun.c` dentro del juego; no hay biblioteca compartida.
 
 ```
 mdk                    the host tool's entry point
+mdk-gui                friendly desktop front-end (also: mdk gui)
 tools/mdk/             its source (Python, standard library only)
+tools/gui/             the desktop front-end (Tk; standard library only)
 tools/env/             the build environment's definition
+scripts/windows/       WSL setup and launch helpers for Windows ARM and x86
 client/c/              mun.h, mun.c and the client's test program
 mk/hardening.mk        the options a console program is compiled with
 contracts/profiles/    what mdk checks a build against, per runtime profile

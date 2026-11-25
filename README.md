@@ -70,6 +70,20 @@ say they are measured in virtual machines only.
 
 `./mdk doctor` checks each of these and says what to do about a missing one.
 
+### Friendly GUI
+
+Prefer buttons to the shell? The same journey is in a desktop window:
+
+```sh
+./mdk-gui
+# or
+./mdk gui
+```
+
+Setup, new project, build, check, pack and simulate each call `mdk` with the
+same arguments the CLI uses. On Windows (Snapdragon X Elite / ARM, or x86)
+the supported path is WSL 2 + Docker; see [docs/gui.md](docs/gui.md).
+
 ## From nothing to a saved game
 
 ```sh
@@ -257,8 +271,11 @@ Compile `mun.c` into the game; there is no shared library.
 
 ```
 mdk                    the host tool's entry point
+mdk-gui                friendly desktop front-end (also: mdk gui)
 tools/mdk/             its source (Python, standard library only)
+tools/gui/             the desktop front-end (Tk; standard library only)
 tools/env/             the build environment's definition
+scripts/windows/       WSL setup and launch helpers for Windows ARM and x86
 client/c/              mun.h, mun.c and the client's test program
 mk/hardening.mk        the options a console program is compiled with
 contracts/profiles/    what mdk checks a build against, per runtime profile
