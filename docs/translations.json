@@ -3,7 +3,7 @@
   "translations": {
     "README.es.md": {
       "source": "README.md",
-      "source_sha256": "7cc62ab87325cad37e0137f1adbeceec633a6f8e1dfa3c58a7de08eb5e07a309"
+      "source_sha256": "3f22ba6355a1d65b636e8620bd3b2b6416808a3388147bb1e165f60f1cbc4c21"
     },
     "SECURITY.es.md": {
       "source": "SECURITY.md",
@@ -17,6 +17,10 @@
       "source": "CODE_OF_CONDUCT.md",
       "source_sha256": "ddf4f2357100cbf67fbd3e1d843e25c4c711c0974cfc643cef718f9a13dea298",
       "verbatim_from_its_publisher": true
+    },
+    "docs/gui.es.md": {
+      "source": "docs/gui.md",
+      "source_sha256": "d27cb3854deda9092d2ea6c709995c2a7e99d4eed932f7af766c6c4a7c6740c2"
     }
   }
 }

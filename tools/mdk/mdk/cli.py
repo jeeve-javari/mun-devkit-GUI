@@ -11,6 +11,7 @@
     mdk check           inspect the build against its runtime profile
     mdk pack            make the card image with MUN OS's card tool, and record it
     mdk sim             run the game in the session simulator
+    mdk gui             open the friendly desktop front-end (docs/gui.md)
 
 Run it in a project directory (one with mun-project.toml), or name one with
 --project. Packing and the simulator use MUN OS's own tools from a checkout:
@@ -20,7 +21,7 @@ devkit."""
 import argparse
 import json
 import shutil
-import subprocess  # nosec B404: only names CalledProcessError, a failed tool's error; this module starts nothing
+import subprocess  # nosec B404: CalledProcessError; cmd_gui starts the local mdk-gui with a fixed argv list
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -167,6 +168,17 @@ def _sim_arguments(args) -> List[str]:
     return passed
 
 
+def cmd_gui(args) -> int:
+    """Open the desktop front-end; same tool, buttons instead of argv."""
+    del args
+    root = Path(__file__).resolve().parents[3]
+    script = root / "mdk-gui"
+    if not script.is_file():
+        raise MdkError("E-GUI", f"The GUI entry point is missing: {script}.",
+                       "Use a full checkout of the devkit, or run ./mdk-gui from its root.")
+    return subprocess.call([sys.executable, str(script)])  # nosec B603: fixed argv; only the local mdk-gui
+
+
 def cmd_sim(args) -> int:
     found, mun_os = _project(args)
     if args.container:
@@ -222,6 +234,8 @@ def parser() -> argparse.ArgumentParser:
     p = command("check", cmd_check, "inspect the build against its runtime profile")
     p.add_argument("--json", action="store_true")
     command("pack", cmd_pack, "make the card image and record it")
+    p = sub.add_parser("gui", help="open the friendly desktop front-end")
+    p.set_defaults(function=cmd_gui)
     p = command("sim", cmd_sim, "run the game in the session simulator")
     p.add_argument("--container", action="store_true",
                    help="run inside the SDK environment (for an AArch64 Linux build on another host)")
