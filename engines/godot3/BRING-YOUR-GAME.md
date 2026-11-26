@@ -18,8 +18,20 @@ Point the Devkit GUI **Project folder** at the tails-from-alteria checkout
 (the directory that contains `mun-project.toml`), then Build → Simulate after
 you assemble `build/content/game.pck` + aarch64 `frt`.
 
-**Fast path in that repo:** export preset **MUN Console (pck)**, then
-`tools/mun/Prepare-MunDevkit.ps1` (Windows) or `tools/mun/prepare-devkit.sh` (WSL).
+**Fast path:** export preset **MUN Console (pck)** in the game repo, then
+from **either** folder:
+
+```powershell
+# from the game repo
+cd C:\Users\YOU\tails-from-alteria
+.\tools\mun\Prepare-MunDevkit.ps1
+
+# or from mun-devkit-GUI (sibling checkout)
+cd C:\Users\YOU\mun-devkit-GUI
+.\scripts\windows\Prepare-TailsMun.ps1
+```
+
+WSL: `tails-from-alteria/tools/mun/prepare-devkit.sh`.
 
 ## What “running on the Devkit” means
 
