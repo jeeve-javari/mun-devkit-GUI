@@ -51,6 +51,7 @@ if (-not (Test-Path $Prepare)) {
   }
   Write-Host "Syncing MUN wiring into: $GameRoot"
   $sync = Join-Path $WiringSource "tools\mun\Sync-MunWiring.ps1"
+  # Call operator keeps paths-with-spaces as one argument (Start-Process does not).
   & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $sync -Target $GameRoot
   if ($LASTEXITCODE -ne 0) { throw "Sync-MunWiring failed" }
 }
@@ -61,9 +62,6 @@ if (-not (Test-Path $Prepare)) {
 }
 
 Write-Host "Using game project: $GameRoot"
-$p = Start-Process -FilePath "powershell.exe" -ArgumentList @(
-  "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $Prepare
-) -Wait -PassThru -NoNewWindow
-if ($p.ExitCode -ne 0) {
-  exit $p.ExitCode
-}
+Write-Host "Running: $Prepare"
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Prepare
+exit $LASTEXITCODE
