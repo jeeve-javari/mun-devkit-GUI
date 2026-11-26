@@ -1,0 +1,23 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: MIT-0
+# Godot 3.5 / FRT probe: entry is frt-boot; content holds game.pck + FRT.
+
+[project]
+name = "hello-mun-godot3"
+
+[card]
+id = "mun.hellogodot3"
+title = "MUN Hello (Godot 3)"
+version = "0.1.0"
+profile = "linux-arm64-gl-v0"
+size_mib = 64
+accent = "#E39A63"
+background = "#16202B"
+
+[build]
+# Builds frt-boot into build/, and requires you to drop game.pck + FRT into
+# build/content/ (see README in engines/godot3/BRING-YOUR-GAME.md).
+run = "make"
+entry = "build/frt-boot"
+content = "build/content"
+hardening = "report"

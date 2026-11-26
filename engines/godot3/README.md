@@ -10,9 +10,11 @@ in [`engines/godot`](../godot/README.md). Many shipping games still target
 | --- | --- |
 | `addons/mun/mun.gd`: session facts + saves for Godot **3.5** GDScript | Written; save socket needs a Unix-stream peer (below) |
 | `samples/hello-mun-godot3`: small probe | Opens in Godot 3.5; exercises facts + load; save needs UDS |
-| FRT as card entry + `.pck` in content | **Recipe sketched** ([pack.md](pack.md)); not wired into `mdk pack` yet |
-| `mdk build` / GUI project type for Godot 3 / FRT | **Not yet** |
-| Official MUN OS runtime profile for FRT | **Needs discussion with MUN OS** |
+| FRT boot wrapper (`frt-boot`) | **Done** — card entry with no argv → `FRT --main-pack …` |
+| Assemble script + bring-your-game guide | **Done** — [BRING-YOUR-GAME.md](BRING-YOUR-GAME.md), [pack.md](pack.md) |
+| `mdk build` for a project with `mun-project.toml` | Works if `build.run` builds frt-boot and content holds `game.pck` + `frt` |
+| GUI “Godot 3” wizard | Not yet — Browse to the game folder that has `mun-project.toml` |
+| Official MUN OS runtime profile for FRT | **Needs discussion with MUN OS** ([issue #20](https://github.com/Play-MUN/mun-devkit/issues/20)) |
 
 ## Why a separate tree
 
