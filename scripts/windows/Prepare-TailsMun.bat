@@ -1,0 +1,13 @@
+@echo off
+REM Bypass PowerShell execution policy and prepare sibling tails-from-alteria.
+setlocal EnableExtensions
+set "REPO=%~dp0..\.."
+for %%I in ("%REPO%") do set "REPO=%%~fI"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%REPO%\scripts\windows\Prepare-TailsMun.ps1" %*
+set "ERR=%ERRORLEVEL%"
+if not "%ERR%"=="0" (
+  echo.
+  pause
+  exit /b %ERR%
+)
+endlocal
