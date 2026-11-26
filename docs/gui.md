@@ -21,7 +21,9 @@ with Tk (`python3-tk` on Debian/Ubuntu).
 | --- | --- | --- |
 | Setup | Check this computer, fetch MUN OS tools, build the SDK environment | `mdk doctor`, `mdk os fetch`, `mdk env build` |
 | Project | New project from the sample; build, check, pack | `mdk new`, `build`, `check`, `pack` |
-| Simulate | Session with container / fresh card / hello-mun script | `mdk sim --container …` |
+| Simulate | **Play in MUN OS** (copy packed `.img` → `mun play --card`); or SDK container session | `mun play --card …` / `mdk sim --container …` |
+
+**Play in MUN OS** needs a mun-os checkout (the folder where you run `py mun play`). Set that path once on the Simulate tab; it is remembered with the other GUI settings. **Pack then Play** packs the project card and opens QEMU in one step.
 
 The full package is still this repository: the C client, contracts, samples,
 Godot adapters (4.7 and the Godot 3.5 / FRT track), tests and `mdk` itself.

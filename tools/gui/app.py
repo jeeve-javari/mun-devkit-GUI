@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess  # nosec B404: opens a folder or a help URL with a fixed argv
 import sys
@@ -23,6 +24,7 @@ from .runner import (
     parse_doctor,
     readiness_from_doctor,
 )
+from .play import install_and_play, read_project_name, sanitize_card_name
 from .state import load_gui_state, save_gui_state, windows_explorer_path
 from .theme import COLORS, FONTS, pick_font
 
@@ -88,6 +90,7 @@ class MdkGui(tk.Tk):
         self._refresh_after = False
         self._pending_doctor = False
         self._pending_project_dir: Optional[str] = None
+        self._pending_play = False
         self._last_args: List[str] = []
         self._run_log: List[str] = []
         self._saved_state = saved
@@ -114,6 +117,11 @@ class MdkGui(tk.Tk):
         parent = saved.get("new_parent")
         if parent and Path(parent).is_dir():
             self.new_parent.set(str(parent))
+        mun_os = saved.get("mun_os_dir")
+        if mun_os and Path(mun_os).is_dir():
+            self.mun_os_dir.set(str(mun_os))
+        if saved.get("play_card_name"):
+            self.play_card_name.set(str(saved["play_card_name"]))
 
     def _collect_state(self) -> Dict[str, Any]:
         return {
@@ -122,6 +130,8 @@ class MdkGui(tk.Tk):
             "new_title": self.new_title.get().strip(),
             "new_id": self.new_id.get().strip(),
             "new_parent": self.new_parent.get().strip(),
+            "mun_os_dir": self.mun_os_dir.get().strip(),
+            "play_card_name": self.play_card_name.get().strip(),
             "geometry": self.geometry(),
         }
 
@@ -334,9 +344,52 @@ class MdkGui(tk.Tk):
         )
         self.sim_gate.pack(anchor="w", pady=(0, 10))
 
+        play_box = ttk.LabelFrame(
+            self.sim_tab, text="Play in MUN OS (QEMU window)", padding=10)
+        play_box.pack(fill="x", pady=(0, 12))
+        ttk.Label(
+            play_box,
+            text="Copies build/<name>.img into mun-os .local/gamecards/ and runs "
+                 "`mun play --card …` (same virtual console as PowerShell). "
+                 "Pack the card first, or use Pack then Play.",
+            style="Dim.TLabel",
+            wraplength=860,
+        ).pack(anchor="w", pady=(0, 8))
+
+        self.mun_os_dir = tk.StringVar(value=self._default_mun_os_dir())
+        mun_row = ttk.Frame(play_box)
+        mun_row.pack(fill="x", pady=(0, 6))
+        ttk.Label(mun_row, text="mun-os folder").pack(side="left")
+        ttk.Entry(mun_row, textvariable=self.mun_os_dir).pack(
+            side="left", fill="x", expand=True, padx=8)
+        ttk.Button(mun_row, text="Browse…", command=self._browse_mun_os).pack(side="left")
+
+        self.play_card_name = tk.StringVar(
+            value=sanitize_card_name(read_project_name(Path(self.project_dir.get()))))
+        card_row = ttk.Frame(play_box)
+        card_row.pack(fill="x", pady=(0, 8))
+        ttk.Label(card_row, text="Card name (2–16 chars)").pack(side="left")
+        ttk.Entry(card_row, textvariable=self.play_card_name, width=18).pack(
+            side="left", padx=8)
+        ttk.Label(
+            card_row, text="Short name for mun play --card", style="Dim.TLabel",
+        ).pack(side="left")
+
+        play_btns = ttk.Frame(play_box)
+        play_btns.pack(fill="x")
+        self.btn_play_os = ttk.Button(
+            play_btns, text="Play in MUN OS", style="Accent.TButton",
+            command=self._play_in_mun_os)
+        self.btn_pack_play = ttk.Button(
+            play_btns, text="Pack then Play", command=self._pack_then_play)
+        self.btn_play_os.pack(side="left", padx=(0, 8))
+        self.btn_pack_play.pack(side="left")
+
+        ttk.Separator(self.sim_tab, orient="horizontal").pack(fill="x", pady=(4, 12))
+
         ttk.Label(
             self.sim_tab,
-            text="Run your built game as a short MUN session (saves, restore, quit).",
+            text="SDK simulate (container) — short session, not the full QEMU console.",
             style="Dim.TLabel",
             wraplength=700,
         ).pack(anchor="w", pady=(0, 10))
@@ -359,7 +412,7 @@ class MdkGui(tk.Tk):
         ttk.Label(script_row, text="Demo script", style="Dim.TLabel").pack(anchor="w")
         ttk.Entry(script_row, textvariable=self.sim_script).pack(fill="x")
 
-        self.btn_sim = ttk.Button(self.sim_tab, text="Simulate session", style="Accent.TButton",
+        self.btn_sim = ttk.Button(self.sim_tab, text="Simulate session",
                                   command=self._run_sim)
         self.btn_sim.pack(anchor="w")
 
@@ -698,6 +751,60 @@ class MdkGui(tk.Tk):
             return
         self._run([*verb, *self._project_args()], cwd=path)
 
+    def _default_mun_os_dir(self) -> str:
+        saved = (self._saved_state or {}).get("mun_os_dir")
+        if saved and Path(saved).is_dir():
+            return str(saved)
+        home = Path.home()
+        for candidate in (
+            home / "mun-os",
+            Path("/mnt/c/Users") / (os.environ.get("USER") or "user") / "mun-os",
+        ):
+            if (candidate / "mun").is_file():
+                return str(candidate)
+        # Common Windows layout when the GUI runs under WSL.
+        users = Path("/mnt/c/Users")
+        if users.is_dir():
+            try:
+                for entry in users.iterdir():
+                    guess = entry / "mun-os"
+                    if (guess / "mun").is_file():
+                        return str(guess)
+            except OSError:
+                pass
+        return str(home / "mun-os")
+
+    def _browse_mun_os(self) -> None:
+        initial = self.mun_os_dir.get() or str(Path.home())
+        chosen = filedialog.askdirectory(
+            title="Select your mun-os checkout", initialdir=initial)
+        if chosen:
+            self.mun_os_dir.set(chosen)
+
+    def _play_in_mun_os(self) -> None:
+        project = Path(self.project_dir.get().strip())
+        mun_os = Path(self.mun_os_dir.get().strip())
+        card = sanitize_card_name(self.play_card_name.get().strip() or read_project_name(project))
+        self.play_card_name.set(card)
+        try:
+            dest, how = install_and_play(project, mun_os, card)
+        except (OSError, ValueError, FileNotFoundError) as exc:
+            messagebox.showerror("Play in MUN OS", str(exc))
+            return
+        self._append_log(f"\n> installed card → {dest}")
+        self._append_log(f"> launched {how}")
+        self.status.set("MUN OS starting…")
+        self._persist_state()
+        messagebox.showinfo(
+            "Play in MUN OS",
+            f"Copied the card as {card}.img and started the console.\n\n{how}")
+
+    def _pack_then_play(self) -> None:
+        if not self._ensure_can_build():
+            return
+        self._pending_play = True
+        self._run_project(["pack"])
+
     def _run_sim(self) -> None:
         if self.sim_container.get() and not self._ensure_can_build():
             return
@@ -762,6 +869,7 @@ class MdkGui(tk.Tk):
                 self.status.set("Stopped")
                 self._append_log("(stopped)")
                 self._pending_project_dir = None
+                self._pending_play = False
             elif result.returncode == 0:
                 self.status.set("Done")
                 self._append_log("(ok)")
@@ -775,14 +883,19 @@ class MdkGui(tk.Tk):
                         "Next: press Build on this tab.")
                 else:
                     self._persist_state()
+                if self._pending_play:
+                    self._pending_play = False
+                    self.after(100, self._play_in_mun_os)
             elif was_doctor:
                 # doctor exits 1 when something is missing — expected during setup
                 self.status.set("Checked")
                 self._append_log("(check finished — see checklist above)")
+                self._pending_play = False
             else:
                 self.status.set("Needs attention")
                 self._append_log(f"(could not finish - code {result.returncode})")
                 self._pending_project_dir = None
+                self._pending_play = False
                 self._explain_failure(result)
             if self._refresh_after and result.returncode == 0 and not result.cancelled:
                 self._refresh_after = False
