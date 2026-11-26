@@ -61,7 +61,21 @@ if (-not (Test-Path $Prepare)) {
   throw "Still missing Prepare-MunDevkit.ps1 under $GameRoot"
 }
 
+# Always tell the game prepare script where THIS Devkit checkout is
+# (game project is often not a sibling of mun-devkit-GUI).
+$env:MUN_DEVKIT = $DevkitRoot
+
+# Refresh prepare script from github clone when available
+$WiringSource = Find-WiringSource
+if ($WiringSource) {
+  $fresh = Join-Path $WiringSource "tools\mun\Prepare-MunDevkit.ps1"
+  if (Test-Path $fresh) {
+    Copy-Item -Force $fresh $Prepare
+  }
+}
+
 Write-Host "Using game project: $GameRoot"
+Write-Host "MUN_DEVKIT:         $env:MUN_DEVKIT"
 Write-Host "Running: $Prepare"
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Prepare
 exit $LASTEXITCODE
