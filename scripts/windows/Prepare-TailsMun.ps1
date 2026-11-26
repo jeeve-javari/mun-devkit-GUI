@@ -65,12 +65,16 @@ if (-not (Test-Path $Prepare)) {
 # (game project is often not a sibling of mun-devkit-GUI).
 $env:MUN_DEVKIT = $DevkitRoot
 
-# Refresh prepare script from github clone when available
+# Refresh prepare script + Makefile from github clone when available
 $WiringSource = Find-WiringSource
 if ($WiringSource) {
   $fresh = Join-Path $WiringSource "tools\mun\Prepare-MunDevkit.ps1"
   if (Test-Path $fresh) {
     Copy-Item -Force $fresh $Prepare
+  }
+  $freshMake = Join-Path $WiringSource "Makefile"
+  if (Test-Path $freshMake) {
+    Copy-Item -Force $freshMake (Join-Path $GameRoot "Makefile")
   }
 }
 
