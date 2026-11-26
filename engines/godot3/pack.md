@@ -1,54 +1,44 @@
-# Packing a Godot 3.5 / FRT game for MUN (sketch)
+# Packing a Godot 3.5 / FRT game for MUN
 
-Not wired into `mdk pack` yet. Target layout for a later project type:
+## Card layout (implemented by frt-boot)
 
 ```text
 build/
-  frt_aarch64          # card entry (ELF, ≤ 64 MiB), hardening=report
+  frt-boot                 # card entry (small C wrapper; mdk build produces this)
   content/
-    game.pck           # exported from Godot 3.5 (GLES2 / ETC as needed)
-    …                  # optional raw assets the game loads at runtime
-mun-project.toml
+    game.pck               # exported from Godot 3.5
+    frt                    # aarch64 FRT 3.5.x (executable)
 ```
 
-Example `mun-project.toml` shape (proposed):
+`mun-project.toml`:
 
 ```toml
-[project]
-name = "tails-from-alteria"
-
-[card]
-id = "org.example.tails-from-alteria"
-title = "Tails From Alteria"
-version = "0.1.0"
-profile = "linux-arm64-gl-v0"   # or a future FRT-oriented profile
-size_mib = 64
-
 [build]
-run = "tools/export.sh"       # produces build/content/game.pck
-entry = "build/frt_aarch64"
+run = "make"
+entry = "build/frt-boot"
 content = "build/content"
-hardening = "report"          # entry is an engine binary, not mdk-compiled C
+hardening = "report"
 ```
 
-## Launch contract (open questions for MUN OS)
+MUN starts `frt-boot` with **no arguments**. The wrapper reads
+`MUN_CONTENT_DIR`, finds `game.pck` + `frt`, and `exec`s:
 
-Today a session starts the entry with **no arguments**. FRT often wants
-`--main-pack …` and `--video-driver GLES2`. Options to agree upstream:
+```text
+frt --main-pack $MUN_CONTENT_DIR/game.pck --video-driver GLES2
+```
 
-1. **Wrapper entry** (small C program the Devkit compiles) that `exec`s FRT
-   with fixed paths under `MUN_CONTENT_DIR`.
-2. **FRT build** that defaults to `MUN_CONTENT_DIR/game.pck` when no args.
-3. **Profile change** allowing a documented argv — belongs in MUN OS, not
-   only this repo.
+See [frt-boot/](frt-boot/) and [tools/assemble-layout.sh](tools/assemble-layout.sh).
+Step-by-step for a real game: [BRING-YOUR-GAME.md](BRING-YOUR-GAME.md).
 
-SIGTERM within the console’s grace period must become a normal Godot quit
-(exit 0), same requirement as the Godot 4.7 track.
+## Launch contract
 
-## What works today without `mdk pack`
+| Piece | Status |
+| --- | --- |
+| Wrapper entry (no argv → FRT argv) | **Done** (`frt-boot`) |
+| FRT + `.pck` assembly script | **Done** (`assemble-layout.sh`) |
+| `StreamPeerUnix` inside FRT for Mun saves | Still required for real card saves |
+| Comfortable GUI “Godot 3 project” wizard | Not yet (Browse to a folder with `mun-project.toml`) |
+| Guaranteed window inside Docker Desktop | Not guaranteed (KMS/DRM); editor play is fine for iteration |
 
-1. Develop in Godot **3.5.2** with `addons/mun` autoloaded.
-2. Export a `.pck` for your device / FRT as you already do.
-3. Use `mdk sim` only after an entry + content layout exists and a UDS peer
-   is in the engine — until then, treat Mun saves as `UNAVAILABLE` in the
-   editor.
+SIGTERM within the console’s grace period must still become a normal Godot
+quit (exit 0) in the FRT build you ship.
