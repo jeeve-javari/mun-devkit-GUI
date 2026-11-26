@@ -1,4 +1,4 @@
-# Copyright 2026 Iván Moreno Mendoza
+﻿# Copyright 2026 Iván Moreno Mendoza
 # SPDX-License-Identifier: Apache-2.0
 # Run from mun-devkit-GUI: prepares sibling tails-from-alteria for Devkit sim.
 # Prefer Prepare-TailsMun.bat (bypasses execution policy).
@@ -35,7 +35,7 @@ if (-not $GameRoot) {
 
 $Prepare = Join-Path $GameRoot "tools\mun\Prepare-MunDevkit.ps1"
 if (-not (Test-Path $Prepare)) {
-  throw "Game repo is missing $Prepare — pull latest main in tails-from-alteria."
+  throw "Game repo is missing $Prepare - pull latest main in tails-from-alteria."
 }
 
 Write-Host "Using game repo: $GameRoot"
