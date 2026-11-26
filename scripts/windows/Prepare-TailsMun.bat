@@ -1,4 +1,6 @@
 @echo off
+REM Copyright 2026 Iván Moreno Mendoza
+REM SPDX-License-Identifier: Apache-2.0
 REM Bypass PowerShell execution policy and prepare sibling tails-from-alteria.
 setlocal EnableExtensions
 set "REPO=%~dp0..\.."

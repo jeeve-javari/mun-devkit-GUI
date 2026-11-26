@@ -1,3 +1,5 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
 # Run from mun-devkit-GUI: prepares sibling tails-from-alteria for Devkit sim.
 # Prefer Prepare-TailsMun.bat (bypasses execution policy).
 $ErrorActionPreference = "Stop"
