@@ -1,10 +1,13 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
 # Run from mun-devkit-GUI: prepares sibling tails-from-alteria for Devkit sim.
-# The real prepare script lives in the game repo (tools/mun/Prepare-MunDevkit.ps1).
+# Prefer Prepare-TailsMun.bat (bypasses execution policy).
 $ErrorActionPreference = "Stop"
 $DevkitRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$Sibling = Join-Path (Split-Path $DevkitRoot -Parent) "tails-from-alteria"
 
 $candidates = @(
-  (Join-Path $DevkitRoot "..\tails-from-alteria"),
+  $Sibling,
   (Join-Path $env:USERPROFILE "tails-from-alteria"),
   $env:TAILS_FROM_ALTERIA
 ) | Where-Object { $_ }
@@ -19,20 +22,21 @@ foreach ($c in $candidates) {
 }
 
 if (-not $GameRoot) {
-  Write-Host @"
-Could not find tails-from-alteria next to this Devkit.
+  Write-Host "tails-from-alteria is not on this PC yet."
+  Write-Host "Will clone into: $Sibling"
+  Write-Host ""
+  if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    throw "git is not on PATH. Install Git for Windows, then re-run."
+  }
+  New-Item -ItemType Directory -Force -Path (Split-Path $Sibling -Parent) | Out-Null
+  git clone https://github.com/jeeve-javari/tails-from-alteria.git $Sibling
+  $GameRoot = (Resolve-Path $Sibling).Path
+}
 
-Clone or put the game repo here:
-  $(Join-Path (Split-Path $DevkitRoot -Parent) 'tails-from-alteria')
-
-Then either:
-  cd that folder
-  .\tools\mun\Prepare-MunDevkit.ps1
-
-Or set `$env:TAILS_FROM_ALTERIA = 'C:\full\path\to\tails-from-alteria'` and re-run this script.
-"@
-  exit 1
+$Prepare = Join-Path $GameRoot "tools\mun\Prepare-MunDevkit.ps1"
+if (-not (Test-Path $Prepare)) {
+  throw "Game repo is missing $Prepare — pull latest main in tails-from-alteria."
 }
 
 Write-Host "Using game repo: $GameRoot"
-& (Join-Path $GameRoot "tools\mun\Prepare-MunDevkit.ps1")
+& $Prepare
