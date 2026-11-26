@@ -49,7 +49,12 @@ if [ ! -f "$boot" ]; then
 fi
 
 mkdir -p "$out/content"
-cp -f "$boot" "$out/frt-boot"
+# boot may already be $out/frt-boot (Makefile path); skip no-op same-file copy
+boot_abs=$(cd "$(dirname "$boot")" && pwd)/$(basename "$boot")
+out_boot_abs=$(cd "$out" 2>/dev/null && pwd)/frt-boot || out_boot_abs="$out/frt-boot"
+if [ "$boot_abs" != "$out_boot_abs" ]; then
+  cp -f "$boot" "$out/frt-boot"
+fi
 chmod +x "$out/frt-boot"
 cp -f "$pck" "$out/content/game.pck"
 cp -f "$frt" "$out/content/frt"
