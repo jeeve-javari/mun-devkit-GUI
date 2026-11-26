@@ -9,7 +9,9 @@ $GodotProject = "C:\Godot Game Development\Projects\Tails From Alteria GD 3.5"
 
 function Find-WiringSource {
   foreach ($c in @($Sibling, (Join-Path $env:USERPROFILE "tails-from-alteria"))) {
-    if ($c -and (Test-Path (Join-Path $c "tools\mun\Sync-MunWiring.ps1"))) {
+    if (-not $c) { continue }
+    $marker = Join-Path $c "tools\mun\Prepare-MunDevkit.ps1"
+    if (Test-Path $marker) {
       return (Resolve-Path $c).Path
     }
   }
