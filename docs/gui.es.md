@@ -21,7 +21,12 @@ Python 3.9 o posterior con Tk (`python3-tk` en Debian/Ubuntu).
 | --- | --- | --- |
 | Setup | Comprobar este ordenador, obtener las herramientas de MUN OS, construir el entorno del SDK | `mdk doctor`, `mdk os fetch`, `mdk env build` |
 | Project | Proyecto nuevo a partir del ejemplo; compilar, comprobar, empaquetar | `mdk new`, `build`, `check`, `pack` |
-| Simulate | Sesión con contenedor / tarjeta limpia / guion de hello-mun | `mdk sim --container …` |
+| Simulate | **Play in MUN OS** (copia el `.img` empaquetado → `mun play --card`); o sesión en contenedor del SDK | `mun play --card …` / `mdk sim --container …` |
+
+**Play in MUN OS** necesita un checkout de mun-os (la carpeta donde ejecutas
+`py mun play`). Indica esa ruta una vez en la pestaña Simulate; se guarda con
+el resto de ajustes. **Pack then Play** empaqueta la tarjeta y abre QEMU de
+un tirón.
 
 El paquete completo sigue siendo este repositorio: el cliente en C, los
 contratos, los ejemplos, los adaptadores de Godot (4.7 y la pista Godot 3.5 /

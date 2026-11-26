@@ -88,6 +88,30 @@ class GuiHelp(unittest.TestCase):
         self.assertIn("PATH docker:", text)
 
 
+class GuiPlay(unittest.TestCase):
+    def test_sanitize_card_name(self):
+        from play import sanitize_card_name
+
+        self.assertEqual(sanitize_card_name("tails-from-alteria"), "tails-from-alter")
+        self.assertEqual(sanitize_card_name("Tails"), "tails")
+        self.assertEqual(sanitize_card_name("x"), "game")
+        self.assertTrue(2 <= len(sanitize_card_name("ab")) <= 16)
+
+    def test_find_packed_image_prefers_project_name(self):
+        import tempfile
+        from pathlib import Path
+        from play import find_packed_image
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            build = root / "build"
+            build.mkdir()
+            (build / "other.img").write_bytes(b"a")
+            wanted = build / "tails.img"
+            wanted.write_bytes(b"b")
+            self.assertEqual(find_packed_image(root, "tails"), wanted)
+
+
 class GuiState(unittest.TestCase):
     def test_windows_explorer_path_maps_mnt_drive(self):
         from pathlib import Path
