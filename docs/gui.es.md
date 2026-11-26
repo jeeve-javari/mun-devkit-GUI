@@ -24,8 +24,11 @@ Python 3.9 o posterior con Tk (`python3-tk` en Debian/Ubuntu).
 | Simulate | Sesión con contenedor / tarjeta limpia / guion de hello-mun | `mdk sim --container …` |
 
 El paquete completo sigue siendo este repositorio: el cliente en C, los
-contratos, los ejemplos, el adaptador de Godot, las pruebas y el propio `mdk`.
-La interfaz no envía un SDK más pequeño.
+contratos, los ejemplos, los adaptadores de Godot (4.7 y la pista Godot 3.5 /
+FRT), las pruebas y el propio `mdk`. La interfaz no envía un SDK más pequeño.
+Los juegos en Godot 3.5 usan [`engines/godot3`](../engines/godot3/README.md);
+Crear proyecto sigue partiendo del ejemplo nativo en C hasta que `mdk` tenga
+un tipo de proyecto Godot 3.
 
 ## Windows (Snapdragon X Elite / ARM, y x86)
 

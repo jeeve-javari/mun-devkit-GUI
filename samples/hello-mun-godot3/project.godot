@@ -1,0 +1,28 @@
+; Copyright 2026 Iván Moreno Mendoza
+; SPDX-License-Identifier: MIT-0
+; MUN Hello for Godot 3.5: probe for the Godot 3 / FRT track.
+
+config_version=4
+
+[application]
+
+config/name="MUN Hello (Godot 3)"
+run/main_scene="res://main.tscn"
+
+[autoload]
+
+Mun="*res://addons/mun/mun.gd"
+
+[display]
+
+window/size/width=1280
+window/size/height=720
+window/stretch/mode="2d"
+window/stretch/aspect="keep"
+
+[rendering]
+
+quality/driver/driver_name="GLES2"
+quality/driver/fallback_to_gles2=true
+vram_compression/import_etc=true
+environment/default_clear_color=Color( 0.086, 0.125, 0.169, 1 )
