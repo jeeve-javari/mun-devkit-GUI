@@ -11,8 +11,9 @@ OUT ?= frt-boot
 
 all: $(OUT)
 
+# Quote OUT: callers may pass a path with spaces; never write an unquoted -o $@.
 $(OUT): frt_boot.c
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) -o "$@" $<
 
 clean:
-	rm -f $(OUT)
+	rm -f -- "$(OUT)"
