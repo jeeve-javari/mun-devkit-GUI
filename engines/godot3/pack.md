@@ -21,10 +21,12 @@ hardening = "report"
 ```
 
 MUN starts `frt-boot` with **no arguments**. The wrapper reads
-`MUN_CONTENT_DIR`, finds `game.pck` + `frt`, and `exec`s:
+`MUN_CONTENT_DIR`, finds `game.pck` + `frt`, stages FRT into `$HOME` or
+`/tmp` (content is mounted `noexec` on the console, so FRT cannot be
+exec'd from the card), and `exec`s:
 
 ```text
-frt --main-pack $MUN_CONTENT_DIR/game.pck --video-driver GLES2
+$HOME/mun-frt --main-pack $MUN_CONTENT_DIR/game.pck --video-driver GLES2
 ```
 
 See [frt-boot/](frt-boot/) and [tools/assemble-layout.sh](tools/assemble-layout.sh).
