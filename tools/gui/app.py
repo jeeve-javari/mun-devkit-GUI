@@ -12,7 +12,7 @@ import tkinter as tk
 import webbrowser
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from . import __version__
 from .runner import (
@@ -23,6 +23,7 @@ from .runner import (
     parse_doctor,
     readiness_from_doctor,
 )
+from .state import load_gui_state, save_gui_state, windows_explorer_path
 from .theme import COLORS, FONTS, pick_font
 
 DOCKER_HELP_URL = "https://docs.docker.com/desktop/setup/install/windows-install/"
@@ -74,7 +75,12 @@ class MdkGui(tk.Tk):
     def __init__(self, root: Optional[Path] = None):
         super().__init__()
         self.devkit = find_root(root)
-        self.project_dir = tk.StringVar(value=str(self.devkit / "samples" / "hello-mun"))
+        saved = load_gui_state()
+        default_project = str(self.devkit / "samples" / "hello-mun")
+        project = saved.get("project_dir") or default_project
+        if not Path(project).is_dir():
+            project = default_project
+        self.project_dir = tk.StringVar(value=project)
         self.status = tk.StringVar(value="Ready")
         self.next_step = tk.StringVar(value="Press Check to see what this computer still needs.")
         self._doctor_cache = ""
@@ -84,15 +90,47 @@ class MdkGui(tk.Tk):
         self._pending_project_dir: Optional[str] = None
         self._last_args: List[str] = []
         self._run_log: List[str] = []
+        self._saved_state = saved
 
         self.title("MUN Devkit")
-        self.geometry("980x720")
+        self.geometry(saved.get("geometry") or "980x720")
         self.minsize(860, 600)
         self.configure(bg=COLORS["bg"])
         self._style()
         self._build()
+        self._apply_saved_new_fields()
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.runner = CommandRunner(self.devkit, self._on_line, self._on_done)
         self.after(200, self.refresh_doctor)
+
+    def _apply_saved_new_fields(self) -> None:
+        saved = self._saved_state
+        if saved.get("new_name"):
+            self.new_name.set(str(saved["new_name"]))
+        if saved.get("new_title"):
+            self.new_title.set(str(saved["new_title"]))
+        if saved.get("new_id"):
+            self.new_id.set(str(saved["new_id"]))
+        parent = saved.get("new_parent")
+        if parent and Path(parent).is_dir():
+            self.new_parent.set(str(parent))
+
+    def _collect_state(self) -> Dict[str, Any]:
+        return {
+            "project_dir": self.project_dir.get().strip(),
+            "new_name": self.new_name.get().strip(),
+            "new_title": self.new_title.get().strip(),
+            "new_id": self.new_id.get().strip(),
+            "new_parent": self.new_parent.get().strip(),
+            "geometry": self.geometry(),
+        }
+
+    def _persist_state(self) -> None:
+        save_gui_state(self._collect_state())
+
+    def _on_close(self) -> None:
+        self._persist_state()
+        self.destroy()
 
     def _style(self) -> None:
         ui = pick_font(FONTS["ui"], 11)
@@ -513,6 +551,7 @@ class MdkGui(tk.Tk):
                                          initialdir=initial, mustexist=True)
         if chosen:
             self.project_dir.set(chosen)
+            self._persist_state()
 
     def _browse_new_parent(self) -> None:
         initial = self.new_parent.get() or str(self._default_projects_parent())
@@ -520,6 +559,7 @@ class MdkGui(tk.Tk):
                                          initialdir=initial, mustexist=True)
         if chosen:
             self.new_parent.set(chosen)
+            self._persist_state()
 
     def _new_folder(self, into: Optional[tk.StringVar] = None) -> None:
         """Create a folder on disk (Tk's directory picker cannot)."""
@@ -572,12 +612,10 @@ class MdkGui(tk.Tk):
             elif system == "aqua":
                 opener = ["open", str(path)]
             else:
-                # From WSL, prefer Windows Explorer for /mnt/c paths.
-                win = path.as_posix()
-                if win.startswith("/mnt/") and len(win) > 6 and win[5] == "/":
-                    drive = win[5].upper()
-                    rest = win[7:].replace("/", "\\")
-                    opener = ["explorer.exe", f"{drive}:\\{rest}"]
+                # From WSL, prefer Windows Explorer for /mnt/<drive>/… paths.
+                win_path = windows_explorer_path(path)
+                if win_path:
+                    opener = ["explorer.exe", win_path]
                 else:
                     opener = ["xdg-open", str(path)]
             subprocess.Popen(opener)  # nosec B603: no shell; opens the project folder only
@@ -730,10 +768,13 @@ class MdkGui(tk.Tk):
                 if pending_project:
                     self.project_dir.set(pending_project)
                     self._pending_project_dir = None
+                    self._persist_state()
                     messagebox.showinfo(
                         "Project created",
                         f"Created:\n{pending_project}\n\n"
                         "Next: press Build on this tab.")
+                else:
+                    self._persist_state()
             elif was_doctor:
                 # doctor exits 1 when something is missing — expected during setup
                 self.status.set("Checked")

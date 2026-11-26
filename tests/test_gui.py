@@ -86,3 +86,35 @@ class GuiHelp(unittest.TestCase):
         text = diagnose_docker()
         self.assertIn("Docker diagnose:", text)
         self.assertIn("PATH docker:", text)
+
+
+class GuiState(unittest.TestCase):
+    def test_windows_explorer_path_maps_mnt_drive(self):
+        from pathlib import Path
+        from state import windows_explorer_path
+
+        self.assertEqual(
+            windows_explorer_path(Path("/mnt/c/Godot Game Development/Projects/Tails")),
+            r"C:\Godot Game Development\Projects\Tails")
+        self.assertEqual(windows_explorer_path(Path("/mnt/c")), "C:\\")
+        self.assertIsNone(windows_explorer_path(Path("/home/user/project")))
+
+    def test_gui_state_round_trip(self):
+        import tempfile
+        from pathlib import Path
+        from state import load_gui_state, save_gui_state
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "gui-state.json"
+            save_gui_state({
+                "project_dir": "/mnt/c/Godot Game Development/Projects/Tails From Alteria GD 3.5",
+                "new_name": "tails-from-alteria",
+                "new_title": "Tails From Alteria",
+                "new_id": "org.jeeve.tails-from-alteria",
+            }, path)
+            loaded = load_gui_state(path)
+            self.assertEqual(
+                loaded["project_dir"],
+                "/mnt/c/Godot Game Development/Projects/Tails From Alteria GD 3.5")
+            self.assertEqual(loaded["new_id"], "org.jeeve.tails-from-alteria")
+            self.assertEqual(load_gui_state(Path(tmp) / "missing.json"), {})

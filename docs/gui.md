@@ -50,7 +50,10 @@ Desktop**.
    enable WSL integration when you want to build / pack / simulate for the console.
 
 Then in the window use **Setup** until doctor is green, open **Project**, and
-follow the same journey as the README.
+follow the same journey as the README. The Project folder (and the “new
+project” fields) are remembered in `~/.config/mun-devkit/gui-state.json`
+when you close the window.
+
 
 If the black console flashes and closes: run the launcher from PowerShell so the
 error stays on screen (`.\scripts\windows\Launch-MdkGui.bat`). A copy of the
