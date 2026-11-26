@@ -35,10 +35,12 @@ if (-not $GameRoot) {
   $GameRoot = (Resolve-Path $Sibling).Path
 }
 
-# Always pull so Windows picks up quoting fixes without a manual cd.
+# Always land on latest main so prepare-script fixes arrive without a manual cd.
 if (Get-Command git -ErrorAction SilentlyContinue) {
-  Write-Host "Updating game repo..."
-  git -C $GameRoot pull --ff-only
+  Write-Host "Updating game repo to origin/main..."
+  git -C $GameRoot fetch origin
+  git -C $GameRoot checkout main
+  git -C $GameRoot pull --ff-only origin main
 }
 
 $Prepare = Join-Path $GameRoot "tools\mun\Prepare-MunDevkit.ps1"
@@ -47,7 +49,6 @@ if (-not (Test-Path $Prepare)) {
 }
 
 Write-Host "Using game repo: $GameRoot"
-# Fresh powershell.exe parse (do not dot-source).
 $p = Start-Process -FilePath "powershell.exe" -ArgumentList @(
   "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $Prepare
 ) -Wait -PassThru -NoNewWindow
