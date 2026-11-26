@@ -51,7 +51,9 @@ camino es **WSL 2 + Docker Desktop**.
    activa la integración con WSL cuando quieras compilar / empaquetar / simular para la consola.
 
 Luego, en la ventana, usa **Setup** hasta que doctor esté en verde, abre **Project** y
-sigue el mismo recorrido que el README.
+sigue el mismo recorrido que el README. La carpeta del proyecto (y los campos de
+«nuevo proyecto») se guardan en `~/.config/mun-devkit/gui-state.json` al cerrar
+la ventana.
 
 Si la consola negra parpadea y se cierra: ejecuta el lanzador desde PowerShell
 para que el error se quede en pantalla (`.\scripts\windows\Launch-MdkGui.bat`).
