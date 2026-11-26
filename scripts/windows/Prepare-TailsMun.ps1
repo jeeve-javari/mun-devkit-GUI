@@ -1,54 +1,66 @@
 ﻿# Copyright 2026 Iván Moreno Mendoza
 # SPDX-License-Identifier: Apache-2.0
-# Run from mun-devkit-GUI: prepares sibling tails-from-alteria for Devkit sim.
+# Run from mun-devkit-GUI: prepares the Tails Godot project for Devkit sim.
 # Prefer Prepare-TailsMun.bat (bypasses execution policy).
 $ErrorActionPreference = "Stop"
 $DevkitRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $Sibling = Join-Path (Split-Path $DevkitRoot -Parent) "tails-from-alteria"
+$GodotProject = "C:\Godot Game Development\Projects\Tails From Alteria GD 3.5"
 
-$candidates = @(
-  $Sibling,
-  (Join-Path $env:USERPROFILE "tails-from-alteria"),
-  $env:TAILS_FROM_ALTERIA
-) | Where-Object { $_ }
+function Find-WiringSource {
+  foreach ($c in @($Sibling, (Join-Path $env:USERPROFILE "tails-from-alteria"))) {
+    if ($c -and (Test-Path (Join-Path $c "tools\mun\Sync-MunWiring.ps1"))) {
+      return (Resolve-Path $c).Path
+    }
+  }
+  return $null
+}
 
+# Prefer the real Godot project (full game assets), then github clone.
 $GameRoot = $null
-foreach ($c in $candidates) {
+foreach ($c in @($env:TAILS_FROM_ALTERIA, $GodotProject, $Sibling, (Join-Path $env:USERPROFILE "tails-from-alteria"))) {
   if (-not $c) { continue }
-  $script = Join-Path $c "tools\mun\Prepare-MunDevkit.ps1"
-  if (Test-Path $script) {
+  if (Test-Path (Join-Path $c "project.godot")) {
     $GameRoot = (Resolve-Path $c).Path
     break
   }
 }
 
 if (-not $GameRoot) {
-  Write-Host "tails-from-alteria is not on this PC yet."
-  Write-Host "Will clone into: $Sibling"
-  Write-Host ""
+  Write-Host "No project.godot found. Cloning github repo to $Sibling ..."
   if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    throw "git is not on PATH. Install Git for Windows, then re-run."
+    throw "git is not on PATH"
   }
-  New-Item -ItemType Directory -Force -Path (Split-Path $Sibling -Parent) | Out-Null
   git clone https://github.com/jeeve-javari/tails-from-alteria.git $Sibling
-  if ($LASTEXITCODE -ne 0) { throw "git clone failed" }
   $GameRoot = (Resolve-Path $Sibling).Path
-}
-
-# Always land on latest main so prepare-script fixes arrive without a manual cd.
-if (Get-Command git -ErrorAction SilentlyContinue) {
-  Write-Host "Updating game repo to origin/main..."
-  git -C $GameRoot fetch origin
-  git -C $GameRoot checkout main
-  git -C $GameRoot pull --ff-only origin main
 }
 
 $Prepare = Join-Path $GameRoot "tools\mun\Prepare-MunDevkit.ps1"
 if (-not (Test-Path $Prepare)) {
-  throw "Game repo is missing Prepare-MunDevkit.ps1 - pull latest main in tails-from-alteria."
+  $WiringSource = Find-WiringSource
+  if (-not $WiringSource) {
+    Write-Host "Cloning tails-from-alteria for MUN wiring files..."
+    if (-not (Test-Path $Sibling)) {
+      git clone https://github.com/jeeve-javari/tails-from-alteria.git $Sibling
+    } else {
+      git -C $Sibling fetch origin
+      git -C $Sibling checkout main
+      git -C $Sibling pull --ff-only origin main
+    }
+    $WiringSource = (Resolve-Path $Sibling).Path
+  }
+  Write-Host "Syncing MUN wiring into: $GameRoot"
+  $sync = Join-Path $WiringSource "tools\mun\Sync-MunWiring.ps1"
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $sync -Target $GameRoot
+  if ($LASTEXITCODE -ne 0) { throw "Sync-MunWiring failed" }
 }
 
-Write-Host "Using game repo: $GameRoot"
+$Prepare = Join-Path $GameRoot "tools\mun\Prepare-MunDevkit.ps1"
+if (-not (Test-Path $Prepare)) {
+  throw "Still missing Prepare-MunDevkit.ps1 under $GameRoot"
+}
+
+Write-Host "Using game project: $GameRoot"
 $p = Start-Process -FilePath "powershell.exe" -ArgumentList @(
   "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $Prepare
 ) -Wait -PassThru -NoNewWindow
