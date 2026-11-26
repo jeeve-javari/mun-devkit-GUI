@@ -32,7 +32,7 @@ class Godot3Track(unittest.TestCase):
         import tempfile
 
         out = Path(tempfile.mkdtemp(prefix="frt-boot-")) / "frt-boot"
-        done = subprocess.run(  # nosec B603: fixed make argv on this repository's Makefile
+        done = subprocess.run(  # nosec B603, B607: no shell; make from PATH, fixed argv on this repository's Makefile
             ["make", "-C", str(ROOT / "engines" / "godot3" / "frt-boot"), f"OUT={out}"],
             capture_output=True, text=True, check=False)
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
