@@ -24,7 +24,10 @@ with Tk (`python3-tk` on Debian/Ubuntu).
 | Simulate | Session with container / fresh card / hello-mun script | `mdk sim --container …` |
 
 The full package is still this repository: the C client, contracts, samples,
-Godot adapter, tests and `mdk` itself. The GUI does not ship a smaller SDK.
+Godot adapters (4.7 and the Godot 3.5 / FRT track), tests and `mdk` itself.
+The GUI does not ship a smaller SDK. Godot 3.5 games use
+[`engines/godot3`](../engines/godot3/README.md); Create project still starts
+from the native C sample until a Godot 3 project type is wired into `mdk`.
 
 ## Windows (Snapdragon X Elite / ARM, and x86)
 

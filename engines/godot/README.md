@@ -5,6 +5,10 @@ Linux ARM64 editor, which `fetch.sh` downloads and verifies by its SHA-512.
 No other version has been tried; a report of one that works, or does not,
 is welcome.
 
+Games on **Godot 3.5** (including FRT / handheld-style exports) use the
+parallel track in [`engines/godot3`](../godot3/README.md). That path is
+intentional: 4.7 is not required for every game.
+
 | Part | State |
 | --- | --- |
 | `addons/mun/mun.gd`: session facts, restored save, acknowledged saves, in GDScript | Tested with the pinned engine build against the session simulator |

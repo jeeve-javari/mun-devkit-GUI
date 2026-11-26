@@ -50,7 +50,8 @@ a console's hardware.
 | Static C client (`client/c`): session facts, restore and acknowledged save | Tested against the simulator and against save files as a console writes them |
 | Session simulator | Reproduces the session layout, the save service and how a session ends; not the sandbox or any device |
 | Sample `samples/hello-mun` (SDL2, OpenGL, OpenAL; profile `linux-arm64-gl-v0`) | Builds, passes the checks, packs, and runs in the simulator, drawing with Mesa's software renderer |
-| Godot adapter (`engines/godot`): GDScript, no native code | Written for Godot 4.7 and checked with exactly one build, the official 4.7.2-stable for Linux ARM64, which `engines/godot/fetch.sh` fetches and verifies. It saves and restores against the simulator; an exported game for a console is not possible yet ([why](engines/godot/README.md)). Other versions have not been tried: a report of one that works, or does not, is welcome |
+| Godot 4.7 adapter (`engines/godot`): GDScript, no native code | Written for Godot 4.7 and checked with exactly one build, the official 4.7.2-stable for Linux ARM64, which `engines/godot/fetch.sh` fetches and verifies. It saves and restores against the simulator; an exported game for a console is not possible yet ([why](engines/godot/README.md)) |
+| Godot 3.5 / FRT track (`engines/godot3`) | Adapter and probe for Godot **3.5.x** (and FRT-style cards) so games need not move to 4.7. Save socket needs a Unix stream peer in the engine; packing into `mdk` is not wired yet ([engines/godot3](engines/godot3/README.md)) |
 | Other engines | Nothing yet |
 
 The runtime profiles are MUN OS's and are provisional there: its documents
@@ -280,8 +281,10 @@ client/c/              mun.h, mun.c and the client's test program
 mk/hardening.mk        the options a console program is compiled with
 contracts/profiles/    what mdk checks a build against, per runtime profile
 samples/hello-mun/     the native sample
-samples/hello-mun-godot/   the same small game as a Godot project
-engines/godot/         the Godot adapter, and how to fetch the pinned engine
+samples/hello-mun-godot/   the same small game as a Godot 4.7 project
+samples/hello-mun-godot3/  the same idea for Godot 3.5
+engines/godot/         Godot 4.7 adapter, and how to fetch the pinned engine
+engines/godot3/        Godot 3.5 / FRT adapter and packing notes
 tests/                 host tests; the sample's run in the environment
 mun-os.lock.json       the MUN OS revision the devkit was checked against
 LICENSE, LICENSES/     the licence texts; docs/licensing.md says which covers what
