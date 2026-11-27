@@ -20,7 +20,8 @@ Python 3.9 o posterior con Tk (`python3-tk` en Debian/Ubuntu).
 | Pestaña | Acciones | Igual que |
 | --- | --- | --- |
 | Setup | Comprobar este ordenador, obtener las herramientas de MUN OS, construir el entorno del SDK | `mdk doctor`, `mdk os fetch`, `mdk env build` |
-| Project | Proyecto nuevo a partir del ejemplo; compilar, comprobar, empaquetar | `mdk new`, `build`, `check`, `pack` |
+| Project | Elegir una **pista de motor**, crear un proyecto, luego compilar / comprobar / empaquetar | `mdk new` / copia del ejemplo; `build`, `check`, `pack` |
+| Engines | Mapa sincero de cada pista (lista / parcial / planificada) | — |
 | Simulate | **Play in MUN OS** (copia el `.img` empaquetado → `mun play --card`); o sesión en contenedor del SDK | `mun play --card …` / `mdk sim --container …` |
 
 **Play in MUN OS** necesita un checkout de mun-os (la carpeta donde ejecutas
@@ -28,12 +29,31 @@ Python 3.9 o posterior con Tk (`python3-tk` en Debian/Ubuntu).
 el resto de ajustes. **Pack then Play** empaqueta la tarjeta y abre QEMU de
 un tirón.
 
+### Pistas de motor (para todos)
+
+Un juego de MUN es siempre un programa **Linux AArch64** en una Game Card.
+La interfaz no finge que todo motor exporte hoy: nombra el camino:
+
+| Pista | Estado | Crear proyecto |
+| --- | --- | --- |
+| Nativo (C / SDL2) | Lista | `mdk new` (hello-mun) |
+| Godot 3.5 + FRT | Lista | copia `samples/hello-mun-godot3` |
+| Godot 3.6+ | Parcial | solo guía — usa la pista 3.5 y alinea tu build |
+| Godot 4.7 | Parcial | copia `samples/hello-mun-godot` (exportación a consola aún no) |
+| Unity | Planificada | guía — hace falta un player arm64 y trabajo de perfil |
+| Unreal | Planificada | guía — probablemente un perfil Vulkan más adelante |
+| Trae tu propio binario | Lista | andamiaje de la tarjeta nativa; sustituye el ELF de entrada |
+
+Que el hardware «soporte Unity / Unreal» es necesario pero no basta: MUN
+sigue necesitando un perfil de ejecución, las reglas de la tarjeta (entrada
+≤ 64 MiB, `content/` noexec) y el empaquetado del Devkit. Hasta entonces
+esas filas quedan **Planificada** y apuntan a
+[traer un juego](https://github.com/Play-MUN/mun-os/blob/main/docs/guides/port-a-game.md).
+
 El paquete completo sigue siendo este repositorio: el cliente en C, los
-contratos, los ejemplos, los adaptadores de Godot (4.7 y la pista Godot 3.5 /
-FRT), las pruebas y el propio `mdk`. La interfaz no envía un SDK más pequeño.
-Los juegos en Godot 3.5 usan [`engines/godot3`](../engines/godot3/README.md);
-Crear proyecto sigue partiendo del ejemplo nativo en C hasta que `mdk` tenga
-un tipo de proyecto Godot 3.
+contratos, los ejemplos, los adaptadores de Godot, las pruebas y el propio
+`mdk`. La lógica de pistas vive en `tools/gui/engines.py` para que un motor
+nuevo sea datos, no un fork de la interfaz.
 
 ## Windows (Snapdragon X Elite / ARM, y x86)
 

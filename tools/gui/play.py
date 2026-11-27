@@ -106,7 +106,7 @@ def launch_mun_play(mun_os: Path, card_name: str) -> Tuple[subprocess.Popen, str
     win = windows_explorer_path(mun_os.resolve())
     if win and (_in_wsl() or os.name == "nt"):
         if os.name == "nt":
-            command = ["py", "-3", "mun", "play", f"--card", card_name]
+            command = ["py", "-3", "mun", "play", "--card", card_name]
             how = f"py mun play --card {card_name}"
             proc = subprocess.Popen(  # nosec B603: fixed argv, no shell
                 command,
