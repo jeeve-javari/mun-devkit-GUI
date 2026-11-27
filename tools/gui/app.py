@@ -793,11 +793,13 @@ class MdkGui(tk.Tk):
             return
         self._append_log(f"\n> installed card → {dest}")
         self._append_log(f"> launched {how}")
-        self.status.set("MUN OS starting…")
         self._persist_state()
         messagebox.showinfo(
             "Play in MUN OS",
-            f"Copied the card as {card}.img and started the console.\n\n{how}")
+            f"Copied the card as {card}.img and started the console.\n\n{how}\n\n"
+            "The QEMU window is separate — this GUI stays usable.")
+        # Detached process: do not leave the status stuck on "starting".
+        self.status.set("Ready")
 
     def _pack_then_play(self) -> None:
         if not self._ensure_can_build():
