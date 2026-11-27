@@ -20,16 +20,35 @@ with Tk (`python3-tk` on Debian/Ubuntu).
 | Tab | Actions | Same as |
 | --- | --- | --- |
 | Setup | Check this computer, fetch MUN OS tools, build the SDK environment | `mdk doctor`, `mdk os fetch`, `mdk env build` |
-| Project | New project from the sample; build, check, pack | `mdk new`, `build`, `check`, `pack` |
+| Project | Pick an **engine lane**, create a project, then build / check / pack | `mdk new` / sample copy; `build`, `check`, `pack` |
+| Engines | Honest map of every lane (ready / partial / planned) | — |
 | Simulate | **Play in MUN OS** (copy packed `.img` → `mun play --card`); or SDK container session | `mun play --card …` / `mdk sim --container …` |
 
 **Play in MUN OS** needs a mun-os checkout (the folder where you run `py mun play`). Set that path once on the Simulate tab; it is remembered with the other GUI settings. **Pack then Play** packs the project card and opens QEMU in one step.
 
+### Engine lanes (for everyone)
+
+A MUN game is always an **AArch64 Linux** program on a Game Card. The GUI
+does not pretend every engine exports today — it names the path:
+
+| Lane | Status | Create project |
+| --- | --- | --- |
+| Native (C / SDL2) | Ready | `mdk new` (hello-mun) |
+| Godot 3.5 + FRT | Ready | copies `samples/hello-mun-godot3` |
+| Godot 3.6+ | Partial | guide only — use the 3.5 lane and match your build |
+| Godot 4.7 | Partial | copies `samples/hello-mun-godot` (console export not ready) |
+| Unity | Planned | guide — need arm64 player + profile work |
+| Unreal | Planned | guide — likely needs Vulkan profile later |
+| Bring your own binary | Ready | scaffolds the native card shell; replace the entry ELF |
+
+Hardware that “supports Unity / Unreal” is necessary but not sufficient:
+MUN still needs a runtime profile, card rules (entry ≤ 64 MiB, `content/`
+noexec), and Devkit packaging. Until those land, those rows stay **Planned**
+and point at [port a game](https://github.com/Play-MUN/mun-os/blob/main/docs/guides/port-a-game.md).
+
 The full package is still this repository: the C client, contracts, samples,
-Godot adapters (4.7 and the Godot 3.5 / FRT track), tests and `mdk` itself.
-The GUI does not ship a smaller SDK. Godot 3.5 games use
-[`engines/godot3`](../engines/godot3/README.md); Create project still starts
-from the native C sample until a Godot 3 project type is wired into `mdk`.
+Godot adapters, tests and `mdk` itself. Lane logic lives in
+`tools/gui/engines.py` so new engines are data, not a one-off UI fork.
 
 ## Windows (Snapdragon X Elite / ARM, and x86)
 

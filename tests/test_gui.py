@@ -112,6 +112,42 @@ class GuiPlay(unittest.TestCase):
             self.assertEqual(find_packed_image(root, "tails"), wanted)
 
 
+class GuiEngines(unittest.TestCase):
+    def test_lanes_cover_major_engines(self):
+        from engines import LANES, get_lane, lane_from_combo, summary_rows
+
+        ids = {lane.id for lane in LANES}
+        self.assertTrue({"native", "godot35", "godot47", "unity", "unreal", "other"} <= ids)
+        self.assertEqual(get_lane("unity").status, "planned")
+        self.assertEqual(get_lane("godot35").status, "ready")
+        self.assertEqual(get_lane("native").action, "mdk_new")
+        self.assertEqual(get_lane("godot35").action, "copy_sample")
+        self.assertEqual(get_lane("godot36").action, "guide")
+        picked = lane_from_combo(get_lane("unreal").combo_label)
+        self.assertEqual(picked.id, "unreal")
+        rows = summary_rows()
+        self.assertEqual(len(rows), len(LANES))
+        self.assertTrue(all("status" in row and "blurb" in row for row in rows))
+
+    def test_copy_sample_and_detect(self):
+        import tempfile
+        from pathlib import Path
+        from engines import copy_sample_project, detect_lane
+
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "probe"
+            copy_sample_project(
+                ROOT, "samples/hello-mun-godot3", dest,
+                title="Probe", name="probe")
+            self.assertTrue((dest / "project.godot").is_file())
+            self.assertTrue((dest / "addons" / "mun" / "mun.gd").is_file())
+            self.assertTrue((dest / "mun-project.toml").is_file())
+            self.assertFalse((dest / "build").exists())
+            self.assertEqual(detect_lane(dest), "godot35")
+            self.assertEqual(detect_lane(ROOT / "samples" / "hello-mun"), "native")
+            self.assertEqual(detect_lane(ROOT / "samples" / "hello-mun-godot"), "godot47")
+
+
 class GuiState(unittest.TestCase):
     def test_windows_explorer_path_maps_mnt_drive(self):
         from pathlib import Path

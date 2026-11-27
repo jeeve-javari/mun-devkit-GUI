@@ -16,6 +16,16 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Any, Dict, List, Optional
 
 from . import __version__
+from .engines import (
+    ACTION_COPY_SAMPLE,
+    ACTION_GUIDE,
+    LANES,
+    copy_sample_project,
+    detect_lane,
+    get_lane,
+    lane_from_combo,
+    summary_rows,
+)
 from .runner import (
     CommandRunner,
     RunResult,
@@ -122,6 +132,13 @@ class MdkGui(tk.Tk):
             self.mun_os_dir.set(str(mun_os))
         if saved.get("play_card_name"):
             self.play_card_name.set(str(saved["play_card_name"]))
+        engine = saved.get("engine_lane")
+        if engine:
+            try:
+                self.engine_lane.set(get_lane(str(engine)).combo_label)
+                self._on_engine_chosen()
+            except KeyError:
+                pass
 
     def _collect_state(self) -> Dict[str, Any]:
         return {
@@ -132,6 +149,7 @@ class MdkGui(tk.Tk):
             "new_parent": self.new_parent.get().strip(),
             "mun_os_dir": self.mun_os_dir.get().strip(),
             "play_card_name": self.play_card_name.get().strip(),
+            "engine_lane": lane_from_combo(self.engine_lane.get()).id,
             "geometry": self.geometry(),
         }
 
@@ -203,13 +221,16 @@ class MdkGui(tk.Tk):
 
         self.setup_tab = ttk.Frame(self.notebook, padding=12)
         self.project_tab = ttk.Frame(self.notebook, padding=12)
+        self.engines_tab = ttk.Frame(self.notebook, padding=12)
         self.sim_tab = ttk.Frame(self.notebook, padding=12)
         self.notebook.add(self.setup_tab, text="  1. Setup  ")
         self.notebook.add(self.project_tab, text="  2. Project  ")
+        self.notebook.add(self.engines_tab, text="  Engines  ")
         self.notebook.add(self.sim_tab, text="  3. Simulate  ")
 
         self._build_setup()
         self._build_project()
+        self._build_engines()
         self._build_sim()
         self._build_log(outer)
 
@@ -281,8 +302,33 @@ class MdkGui(tk.Tk):
         ttk.Button(path_row, text="Browse…", command=self._browse_project).pack(side="left", padx=(0, 4))
         ttk.Button(path_row, text="New folder…", command=self._new_folder).pack(side="left")
 
-        new_box = ttk.LabelFrame(self.project_tab, text="New project from the sample", padding=10)
+        new_box = ttk.LabelFrame(self.project_tab, text="New project", padding=10)
         new_box.pack(fill="x", pady=(0, 12))
+
+        self.engine_lane = tk.StringVar(value=get_lane("native").combo_label)
+        engine_row = ttk.Frame(new_box)
+        engine_row.pack(fill="x", pady=(0, 8))
+        ttk.Label(engine_row, text="Engine", style="Dim.TLabel").pack(anchor="w")
+        self.engine_combo = ttk.Combobox(
+            engine_row,
+            textvariable=self.engine_lane,
+            values=[lane.combo_label for lane in LANES],
+            state="readonly",
+        )
+        self.engine_combo.pack(fill="x", pady=(2, 0))
+        self.engine_combo.bind("<<ComboboxSelected>>", lambda _e: self._on_engine_chosen())
+
+        self.engine_blurb = ttk.Label(
+            new_box, text=get_lane("native").blurb, style="Dim.TLabel", wraplength=700)
+        self.engine_blurb.pack(anchor="w", pady=(0, 4))
+        self.engine_steps = ttk.Label(
+            new_box,
+            text=self._format_steps(get_lane("native")),
+            style="Dim.TLabel",
+            wraplength=700,
+        )
+        self.engine_steps.pack(anchor="w", pady=(0, 8))
+
         self.new_name = tk.StringVar(value="star-well")
         self.new_title = tk.StringVar(value="Star Well")
         self.new_id = tk.StringVar(value="org.example.star-well")
@@ -310,12 +356,17 @@ class MdkGui(tk.Tk):
                    command=lambda: self._new_folder(into=self.new_parent)).pack(side="left")
         ttk.Label(
             new_box,
-            text="Creates a new folder named after the project inside that location. Card id must be lowercase.",
+            text=("Creates a new folder named after the project. Pick an engine first — "
+                  "Native and Godot samples scaffold; Unity / Unreal show the path until a lane ships."),
             style="Dim.TLabel",
             wraplength=700,
         ).pack(anchor="w", pady=(8, 0))
-        ttk.Button(new_box, text="Create project", style="Accent.TButton",
-                   command=self._new_project).pack(anchor="w", pady=(10, 0))
+        btns = ttk.Frame(new_box)
+        btns.pack(anchor="w", pady=(10, 0))
+        ttk.Button(btns, text="Create project", style="Accent.TButton",
+                   command=self._new_project).pack(side="left", padx=(0, 8))
+        ttk.Button(btns, text="Open engine docs",
+                   command=self._open_engine_docs).pack(side="left")
 
         flow = ttk.LabelFrame(self.project_tab, text="Build journey", padding=10)
         flow.pack(fill="x")
@@ -334,6 +385,89 @@ class MdkGui(tk.Tk):
         self.btn_open = ttk.Button(row, text="Open folder", command=self._open_folder)
         for btn in (self.btn_build, self.btn_check_proj, self.btn_pack, self.btn_open):
             btn.pack(side="left", padx=(0, 8))
+
+    def _build_engines(self) -> None:
+        ttk.Label(
+            self.engines_tab,
+            text=("Every engine ends as an AArch64 Linux Game Card. This tab is the honest map: "
+                  "what the Devkit can scaffold today, what is partial, and what is planned "
+                  "(Unity / Unreal need runtime profiles + export targets — hardware alone is not enough)."),
+            style="Dim.TLabel",
+            wraplength=860,
+        ).pack(anchor="w", pady=(0, 10))
+
+        cols = ("engine", "status", "blurb")
+        tree = ttk.Treeview(self.engines_tab, columns=cols, show="headings", height=8)
+        tree.heading("engine", text="Engine")
+        tree.heading("status", text="Status")
+        tree.heading("blurb", text="What you get")
+        tree.column("engine", width=160, stretch=False)
+        tree.column("status", width=120, stretch=False)
+        tree.column("blurb", width=560)
+        for row in summary_rows():
+            tree.insert("", "end", iid=row["id"], values=(row["engine"], row["status"], row["blurb"]))
+        tree.pack(fill="both", expand=True, pady=(0, 10))
+        self.engines_tree = tree
+
+        actions = ttk.Frame(self.engines_tab)
+        actions.pack(fill="x")
+        ttk.Button(
+            actions, text="Use selected on Project tab", style="Accent.TButton",
+            command=self._engines_use_selected,
+        ).pack(side="left", padx=(0, 8))
+        ttk.Button(
+            actions, text="Open docs for selected",
+            command=self._engines_open_docs,
+        ).pack(side="left")
+
+    @staticmethod
+    def _format_steps(lane) -> str:
+        return "Next:\n" + "\n".join(f"  {i}. {step}" for i, step in enumerate(lane.next_steps, 1))
+
+    def _on_engine_chosen(self) -> None:
+        lane = lane_from_combo(self.engine_lane.get())
+        self.engine_blurb.configure(text=lane.blurb)
+        self.engine_steps.configure(text=self._format_steps(lane))
+
+    def _open_engine_docs(self, lane_id: Optional[str] = None) -> None:
+        lane = get_lane(lane_id) if lane_id else lane_from_combo(self.engine_lane.get())
+        rel = lane.docs_rel or "docs/gui.md"
+        path = self.devkit / rel
+        if not path.is_file():
+            messagebox.showinfo(
+                "Engine docs",
+                f"No local doc yet for {lane.label}.\n\n{lane.blurb}")
+            return
+        self._reveal_path(path)
+
+    def _engines_use_selected(self) -> None:
+        sel = self.engines_tree.selection()
+        if not sel:
+            messagebox.showinfo("Engines", "Select a row first.")
+            return
+        lane = get_lane(sel[0])
+        self.engine_lane.set(lane.combo_label)
+        self._on_engine_chosen()
+        self.notebook.select(self.project_tab)
+
+    def _engines_open_docs(self) -> None:
+        sel = self.engines_tree.selection()
+        if not sel:
+            messagebox.showinfo("Engines", "Select a row first.")
+            return
+        self._open_engine_docs(sel[0])
+
+    def _reveal_path(self, path: Path) -> None:
+        """Reveal a folder in the host file manager (WSL → Explorer when under /mnt)."""
+        path = Path(path)
+        if not path.exists():
+            messagebox.showerror("Open", f"Missing:\n{path}")
+            return
+        target = path if path.is_dir() else path.parent
+        previous = self.project_dir.get()
+        self.project_dir.set(str(target))
+        self._open_folder()
+        self.project_dir.set(previous)
 
     def _build_sim(self) -> None:
         self.sim_gate = ttk.Label(
@@ -604,6 +738,13 @@ class MdkGui(tk.Tk):
                                          initialdir=initial, mustexist=True)
         if chosen:
             self.project_dir.set(chosen)
+            guessed = detect_lane(Path(chosen))
+            if guessed:
+                try:
+                    self.engine_lane.set(get_lane(guessed).combo_label)
+                    self._on_engine_chosen()
+                except (KeyError, tk.TclError):
+                    pass
             self._persist_state()
 
     def _browse_new_parent(self) -> None:
@@ -676,6 +817,17 @@ class MdkGui(tk.Tk):
             messagebox.showerror("Project", str(exc))
 
     def _new_project(self) -> None:
+        lane = lane_from_combo(self.engine_lane.get())
+        if lane.action == ACTION_GUIDE:
+            steps = "\n".join(f"• {s}" for s in lane.next_steps)
+            messagebox.showinfo(
+                lane.label,
+                f"{lane.blurb}\n\n{steps}\n\n"
+                "No scaffold yet for this engine — open the Engines tab for the full map, "
+                "or choose Native / Godot 3.5 / Godot 4.7 / Bring your own binary to create a folder.")
+            self.notebook.select(self.engines_tab)
+            return
+
         name = self.new_name.get().strip()
         if not name:
             messagebox.showerror("New project", "Give the project a name.")
@@ -713,10 +865,36 @@ class MdkGui(tk.Tk):
                 "Pick another name, or Browse… to a different Create inside folder.")
             return
         title = self.new_title.get().strip() or name
+
+        if lane.action == ACTION_COPY_SAMPLE:
+            if not lane.sample_rel:
+                messagebox.showerror("New project", f"No sample wired for {lane.label}.")
+                return
+            try:
+                copy_sample_project(
+                    self.devkit, lane.sample_rel, target, title=title, name=name)
+            except (OSError, FileNotFoundError, FileExistsError) as exc:
+                messagebox.showerror("New project", str(exc))
+                return
+            self.project_dir.set(str(target))
+            self._pending_project_dir = None
+            self._persist_state()
+            self._append_log(f"\n> created {lane.label} sample → {target}")
+            messagebox.showinfo(
+                "Project created",
+                f"Created from {lane.sample_rel}:\n{target}\n\n"
+                f"{self._format_steps(lane)}")
+            return
+
+        # Native + Bring your own binary: mdk new scaffold.
         args = ["new", name, "--directory", str(target), "--title", title]
         if card_id:
             args += ["--id", card_id]
         self._pending_project_dir = str(target)
+        if lane.id == "other":
+            self._append_log(
+                "\n> Bring your own binary: scaffolding the native sample as a card shell — "
+                "replace the entry with your arm64 ELF when ready.")
         self._run(args)
 
     def _project_args(self) -> List[str]:
