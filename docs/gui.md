@@ -19,10 +19,15 @@ with Tk (`python3-tk` on Debian/Ubuntu).
 
 | Tab | Actions | Same as |
 | --- | --- | --- |
-| Setup | Check this computer, fetch MUN OS tools, build the SDK environment | `mdk doctor`, `mdk os fetch`, `mdk env build` |
+| Setup | Check this computer, fetch MUN OS tools, build the SDK environment; **Check for updates** / **Update & restart** | `mdk doctor`, `mdk os fetch`, `mdk env build`; `git fetch` + `git pull --ff-only` |
 | Project | Pick an **engine lane**, create a project, then build / check / pack | `mdk new` / sample copy; `build`, `check`, `pack` |
 | Engines | Honest map of every lane (ready / partial / planned) | — |
 | Simulate | **Play in MUN OS** (copy packed `.img` → `mun play --card`); or SDK container session | `mun play --card …` / `mdk sim --container …` |
+
+**Update & restart** (also the header **Update…** button) fetches the Devkit
+git remote, fast-forwards your current branch, then reopens the window. It
+refuses a dirty tree or a diverged branch — clean those in a terminal first.
+Needs a normal git clone (not a plain zip without `.git`).
 
 **Play in MUN OS** needs a mun-os checkout (the folder where you run `py mun play`). Set that path once on the Simulate tab; it is remembered with the other GUI settings. **Pack then Play** packs the project card and opens QEMU in one step.
 

@@ -112,6 +112,76 @@ class GuiPlay(unittest.TestCase):
             self.assertEqual(find_packed_image(root, "tails"), wanted)
 
 
+class GuiUpdate(unittest.TestCase):
+    def test_check_and_ff_pull(self):
+        import subprocess
+        import tempfile
+        from pathlib import Path
+
+        import gitenv
+        from update import UpdateError, apply_update, check_for_updates, restart_command
+
+        tmp = Path(tempfile.mkdtemp(prefix="mdk-upd-"))
+        self.addCleanup(lambda: __import__("shutil").rmtree(tmp, ignore_errors=True))
+        env = gitenv.isolate(self, tmp / "git-home")
+        bare = tmp / "remote.git"
+        work = tmp / "work"
+        clone = tmp / "clone"
+        bare.mkdir()
+        subprocess.run(  # nosec B603, B607
+            ["git", "init", "--bare", str(bare)], check=True, env=env,
+            capture_output=True)
+        subprocess.run(  # nosec B603, B607
+            ["git", "clone", str(bare), str(work)], check=True, env=env,
+            capture_output=True)
+        (work / "README").write_text("one\n", encoding="utf-8")
+        for cmd in (
+            ["git", "-C", str(work), "add", "README"],
+            ["git", "-C", str(work), "commit", "-m", "one"],
+            ["git", "-C", str(work), "branch", "-M", "main"],
+            ["git", "-C", str(work), "push", "-u", "origin", "main"],
+        ):
+            subprocess.run(cmd, check=True, env=env, capture_output=True)  # nosec B603
+        subprocess.run(  # nosec B603, B607
+            ["git", "clone", str(bare), str(clone)], check=True, env=env,
+            capture_output=True)
+
+        status = check_for_updates(clone, fetch=True)
+        self.assertEqual(status.behind, 0)
+        self.assertFalse(status.dirty)
+
+        (work / "README").write_text("two\n", encoding="utf-8")
+        for cmd in (
+            ["git", "-C", str(work), "add", "README"],
+            ["git", "-C", str(work), "commit", "-m", "two"],
+            ["git", "-C", str(work), "push"],
+        ):
+            subprocess.run(cmd, check=True, env=env, capture_output=True)  # nosec B603
+
+        status = check_for_updates(clone, fetch=True)
+        self.assertEqual(status.behind, 1)
+        self.assertIn("two", status.log)
+        after = apply_update(clone, status)
+        self.assertEqual(after.behind, 0)
+        self.assertEqual((clone / "README").read_text(encoding="utf-8"), "two\n")
+
+        (clone / "dirty.txt").write_text("x", encoding="utf-8")
+        dirty = check_for_updates(clone, fetch=False)
+        self.assertTrue(dirty.dirty)
+        with self.assertRaises(UpdateError):
+            apply_update(clone, dirty)
+
+        cmd = restart_command(ROOT)
+        self.assertEqual(cmd[0], sys.executable)
+        self.assertTrue(str(cmd[1]).endswith("mdk-gui"))
+
+    def test_restart_command_prefers_mdk_gui(self):
+        from update import restart_command
+
+        cmd = restart_command(ROOT)
+        self.assertIn("mdk-gui", cmd[1])
+
+
 class GuiEngines(unittest.TestCase):
     def test_lanes_cover_major_engines(self):
         from engines import LANES, get_lane, lane_from_combo, summary_rows
