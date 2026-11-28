@@ -37,6 +37,7 @@ from .runner import (
 from .play import install_and_play, read_project_name, sanitize_card_name
 from .state import load_gui_state, save_gui_state, windows_explorer_path
 from .theme import COLORS, FONTS, pick_font
+from .update import UpdateError, UpdateStatus, apply_update, check_for_updates, relaunch_and_exit
 
 DOCKER_HELP_URL = "https://docs.docker.com/desktop/setup/install/windows-install/"
 
@@ -209,6 +210,8 @@ class MdkGui(tk.Tk):
         header.pack(fill="x", pady=(0, 8))
         ttk.Label(header, text="MUN Devkit", style="Title.TLabel").pack(side="left")
         ttk.Label(header, text=f"  v{__version__}", style="Dim.TLabel").pack(side="left", pady=(8, 0))
+        ttk.Button(header, text="Update…", command=self._update_devkit).pack(
+            side="right", padx=(8, 0))
         ttk.Label(header, textvariable=self.status, style="Dim.TLabel").pack(side="right", pady=(8, 0))
 
         banner = tk.Frame(outer, bg=COLORS["bg_raised"], highlightthickness=0)
@@ -265,6 +268,24 @@ class MdkGui(tk.Tk):
                                   command=self._build_env)
         for btn in (self.btn_check, self.btn_fetch, self.btn_docker, self.btn_env):
             btn.pack(side="left", padx=(0, 8))
+
+        update_box = ttk.LabelFrame(self.setup_tab, text="Devkit updates", padding=10)
+        update_box.pack(fill="x", pady=(0, 10))
+        self.update_status = tk.StringVar(
+            value="Pull the latest Devkit from git without opening a terminal.")
+        ttk.Label(
+            update_box, textvariable=self.update_status, style="Dim.TLabel", wraplength=700,
+        ).pack(anchor="w", pady=(0, 8))
+        upd_row = ttk.Frame(update_box)
+        upd_row.pack(fill="x")
+        ttk.Button(
+            upd_row, text="Check for updates", command=self._check_devkit_updates,
+        ).pack(side="left", padx=(0, 8))
+        self.btn_apply_update = ttk.Button(
+            upd_row, text="Update & restart", style="Accent.TButton",
+            command=self._update_devkit, state="disabled")
+        self.btn_apply_update.pack(side="left")
+        self._update_info: Optional[UpdateStatus] = None
 
         ttk.Label(
             self.setup_tab,
@@ -700,6 +721,78 @@ class MdkGui(tk.Tk):
             return
         self._refresh_after = True
         self._run(["env", "build"])
+
+    def _check_devkit_updates(self) -> None:
+        self.status.set("Checking for updates…")
+        self.update()
+        try:
+            info = check_for_updates(self.devkit, fetch=True)
+        except UpdateError as exc:
+            self.status.set("Update check failed")
+            self.update_status.set(str(exc).split("\n", 1)[0])
+            self.btn_apply_update.configure(state="disabled")
+            self._update_info = None
+            messagebox.showerror("Devkit updates", str(exc))
+            return
+        self._update_info = info
+        self.update_status.set(info.summary)
+        self._append_log(f"\n> update check: {info.summary}")
+        if info.log:
+            self._append_log(info.log)
+        can_apply = info.behind > 0 and not info.dirty and not (info.ahead and info.behind)
+        self.btn_apply_update.configure(state="normal" if can_apply else "disabled")
+        self.status.set("Ready")
+        if info.behind == 0 and not info.dirty:
+            messagebox.showinfo("Devkit updates", info.summary)
+        elif info.behind > 0:
+            detail = info.summary
+            if info.log:
+                detail += "\n\nNewest commits:\n" + info.log
+            if can_apply:
+                detail += "\n\nPress Update & restart to install and reopen this window."
+            messagebox.showinfo("Devkit updates", detail)
+        else:
+            messagebox.showinfo("Devkit updates", info.summary)
+
+    def _update_devkit(self) -> None:
+        if self.runner.busy:
+            messagebox.showinfo(
+                "Update & restart",
+                "Wait for the current command to finish, then try again.")
+            return
+        self.status.set("Updating…")
+        self.update()
+        try:
+            before = self._update_info or check_for_updates(self.devkit, fetch=True)
+            if before.behind == 0 and not before.dirty:
+                self.update_status.set(before.summary)
+                self.status.set("Ready")
+                messagebox.showinfo("Update & restart", before.summary)
+                return
+            after = apply_update(self.devkit, before)
+        except UpdateError as exc:
+            self.status.set("Update failed")
+            self.update_status.set(str(exc).split("\n", 1)[0])
+            self._append_log(f"\n> update failed:\n{exc}")
+            messagebox.showerror("Update & restart", str(exc))
+            return
+        self._update_info = after
+        self.update_status.set(after.summary)
+        self._append_log(f"\n> updated to {after.local_sha[:12]} ({after.upstream})")
+        self._persist_state()
+        messagebox.showinfo(
+            "Update & restart",
+            "Devkit updated. This window will close and a new one will open.")
+        try:
+            relaunch_and_exit(self.devkit)
+        except OSError as exc:
+            messagebox.showerror(
+                "Update & restart",
+                f"Updated on disk, but could not restart automatically:\n{exc}\n\n"
+                "Close this window and open MUN Devkit again.")
+            self.status.set("Ready")
+            return
+        self.destroy()
 
     # --- project actions ---------------------------------------------------------
 

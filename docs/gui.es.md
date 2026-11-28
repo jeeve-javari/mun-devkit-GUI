@@ -19,10 +19,15 @@ Python 3.9 o posterior con Tk (`python3-tk` en Debian/Ubuntu).
 
 | Pestaña | Acciones | Igual que |
 | --- | --- | --- |
-| Setup | Comprobar este ordenador, obtener las herramientas de MUN OS, construir el entorno del SDK | `mdk doctor`, `mdk os fetch`, `mdk env build` |
+| Setup | Comprobar este ordenador, obtener las herramientas de MUN OS, construir el entorno del SDK; **Check for updates** / **Update & restart** | `mdk doctor`, `mdk os fetch`, `mdk env build`; `git fetch` + `git pull --ff-only` |
 | Project | Elegir una **pista de motor**, crear un proyecto, luego compilar / comprobar / empaquetar | `mdk new` / copia del ejemplo; `build`, `check`, `pack` |
 | Engines | Mapa sincero de cada pista (lista / parcial / planificada) | — |
 | Simulate | **Play in MUN OS** (copia el `.img` empaquetado → `mun play --card`); o sesión en contenedor del SDK | `mun play --card …` / `mdk sim --container …` |
+
+**Update & restart** (también el botón **Update…** del encabezado) obtiene el
+remoto git del Devkit, adelanta tu rama actual y vuelve a abrir la ventana.
+Rechaza un árbol sucio o una rama divergente: limpia eso en una terminal
+antes. Necesita un clon git normal (no un zip sin `.git`).
 
 **Play in MUN OS** necesita un checkout de mun-os (la carpeta donde ejecutas
 `py mun play`). Indica esa ruta una vez en la pestaña Simulate; se guarda con
