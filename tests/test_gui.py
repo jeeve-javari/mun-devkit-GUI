@@ -128,10 +128,10 @@ class GuiUpdate(unittest.TestCase):
         work = tmp / "work"
         clone = tmp / "clone"
         bare.mkdir()
-        subprocess.run(  # nosec B603, B607
+        subprocess.run(  # nosec B603, B607: no shell; git from PATH, fixed argv for a temp bare repo
             ["git", "init", "--bare", str(bare)], check=True, env=env,
             capture_output=True)
-        subprocess.run(  # nosec B603, B607
+        subprocess.run(  # nosec B603, B607: no shell; git from PATH, fixed argv to clone the temp bare
             ["git", "clone", str(bare), str(work)], check=True, env=env,
             capture_output=True)
         (work / "README").write_text("one\n", encoding="utf-8")
@@ -141,8 +141,8 @@ class GuiUpdate(unittest.TestCase):
             ["git", "-C", str(work), "branch", "-M", "main"],
             ["git", "-C", str(work), "push", "-u", "origin", "main"],
         ):
-            subprocess.run(cmd, check=True, env=env, capture_output=True)  # nosec B603
-        subprocess.run(  # nosec B603, B607
+            subprocess.run(cmd, check=True, env=env, capture_output=True)  # nosec B603: no shell; fixed git argv list the test built
+        subprocess.run(  # nosec B603, B607: no shell; git from PATH, fixed argv to clone again for the updater
             ["git", "clone", str(bare), str(clone)], check=True, env=env,
             capture_output=True)
 
@@ -156,7 +156,7 @@ class GuiUpdate(unittest.TestCase):
             ["git", "-C", str(work), "commit", "-m", "two"],
             ["git", "-C", str(work), "push"],
         ):
-            subprocess.run(cmd, check=True, env=env, capture_output=True)  # nosec B603
+            subprocess.run(cmd, check=True, env=env, capture_output=True)  # nosec B603: no shell; fixed git argv list the test built
 
         status = check_for_updates(clone, fetch=True)
         self.assertEqual(status.behind, 1)
