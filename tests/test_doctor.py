@@ -42,8 +42,14 @@ class Doctor(Scratch):
     def doctor(self, environment: dict) -> str:
         done = subprocess.run(  # nosec B603: this Python and this repository's mdk, no shell, with arguments the test wrote
             [sys.executable, str(ROOT / "mdk"), "doctor"], capture_output=True, text=True, env=environment)
-        return next((line for line in done.stdout.splitlines() if "SDK environment" in line or "runtime" in line),
-                    done.stdout + done.stderr)
+        lines = done.stdout.splitlines()
+        for line in lines:
+            if "SDK environment" in line:
+                return line
+        for line in lines:
+            if "runtime" in line:
+                return line
+        return done.stdout + done.stderr
 
     def test_a_runtime_that_is_not_running_is_said_to_be_stopped_not_unbuilt(self):
         line = self.doctor(self.runtime(STOPPED))

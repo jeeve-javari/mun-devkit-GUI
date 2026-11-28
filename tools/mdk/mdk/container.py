@@ -28,20 +28,213 @@ def image_tag() -> str:
     return "mun-devkit-env:" + hashlib.sha256(DOCKERFILE.read_bytes()).hexdigest()[:12]
 
 
-def docker() -> str:
-    found = shutil.which("docker")
-    if not found:
-        raise MdkError("E-ENV-DOCKER", "No container runtime found (docker).",
-                       "Install one that runs linux/arm64 containers. On an ARM64 computer they run natively; "
-                       "elsewhere they are emulated and slow.")
+def _looks_like_docker(path: Path) -> bool:
+    name = path.name.lower()
+    return name in ("docker", "docker.exe") and path.is_file()
+
+
+def _docker_from_windows_where() -> List[str]:
+    """Ask Windows where docker is (works from WSL when Docker Desktop added it to PATH)."""
+    found: List[str] = []
+    try:
+        done = subprocess.run(  # nosec B603, B607: fixed argv; asks Windows where docker is
+            ["cmd.exe", "/c", "where", "docker"],
+            capture_output=True, text=True, check=False, timeout=15)
+    except (OSError, subprocess.TimeoutExpired):
+        return found
+    if done.returncode != 0:
+        return found
+    for line in done.stdout.splitlines():
+        win = line.strip()
+        if not win:
+            continue
+        # C:\Program Files\... -> /mnt/c/Program Files/...
+        if len(win) >= 3 and win[1] == ":" and win[2] in ("\\", "/"):
+            drive = win[0].lower()
+            rest = win[3:].replace("\\", "/")
+            unix = f"/mnt/{drive}/{rest}"
+            if _looks_like_docker(Path(unix)):
+                found.append(unix)
+            found.append(win)  # docker.exe can be started with the Windows path from WSL
     return found
+
+
+def _windows_user_names() -> List[str]:
+    """Windows account folders under /mnt/c/Users (WSL home name may differ)."""
+    names = []
+    users = Path("/mnt/c/Users")
+    if users.is_dir():
+        for entry in users.iterdir():
+            if entry.is_dir() and entry.name not in ("Public", "Default", "Default User", "All Users"):
+                names.append(entry.name)
+    # Also try the WSL username when it matches a Windows profile.
+    home_name = Path.home().name
+    if home_name and home_name not in names:
+        names.append(home_name)
+    return names
+
+
+def _docker_under_program_files() -> List[str]:
+    """Scan Docker Desktop folders: all-users Program Files and per-user LocalAppData."""
+    found: List[str] = []
+    roots = [
+        Path("/mnt/c/Program Files/Docker"),
+        Path("/mnt/c/Program Files (x86)/Docker"),
+        Path.home() / "AppData/Local/Docker",
+        Path.home() / "AppData/Local/Programs/DockerDesktop",
+        Path.home() / "AppData/Local/Programs/Docker",
+    ]
+    for user in _windows_user_names():
+        roots.append(Path(f"/mnt/c/Users/{user}/AppData/Local/Programs/DockerDesktop"))
+        roots.append(Path(f"/mnt/c/Users/{user}/AppData/Local/Programs/Docker"))
+        roots.append(Path(f"/mnt/c/Users/{user}/AppData/Local/Docker"))
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for pattern in ("**/resources/bin/docker.exe", "**/resources/bin/docker", "**/docker.exe"):
+            for path in root.glob(pattern):
+                if _looks_like_docker(path):
+                    found.append(str(path))
+    return found
+
+
+def _docker_candidates() -> List[str]:
+    """Where `docker` may live: PATH, Windows where.exe, then Docker Desktop folders.
+
+    Linux-native paths (WSL integration) are preferred over `/mnt/c/...` Windows
+    binaries: the Windows CLI can be on PATH from the launcher yet fail to talk
+    to the engine from inside Ubuntu.
+    """
+    found: List[str] = []
+    for name in ("docker", "docker.exe"):
+        path = shutil.which(name)
+        if path:
+            found.append(path)
+    found += _docker_from_windows_where()
+    found += _docker_under_program_files()
+    for rel in (
+        "/mnt/c/Program Files/Docker/Docker/resources/bin/docker",
+        "/mnt/c/Program Files/Docker/Docker/resources/bin/docker.exe",
+    ):
+        if _looks_like_docker(Path(rel)):
+            found.append(rel)
+    seen = set()
+    ordered: List[str] = []
+    for path in found:
+        if path not in seen:
+            seen.add(path)
+            ordered.append(path)
+
+    def rank(path: str) -> tuple:
+        lower = path.replace("\\", "/").lower()
+        windows_side = lower.startswith("/mnt/") or (len(path) >= 2 and path[1] == ":")
+        return (1 if windows_side else 0, ordered.index(path))
+
+    return sorted(ordered, key=rank)
+
+
+def diagnose_docker() -> str:
+    """Plain text for the GUI: what this computer can see about Docker."""
+    lines = ["Docker diagnose:"]
+    which_docker = shutil.which("docker")
+    which_exe = shutil.which("docker.exe")
+    lines.append(f"  PATH docker:      {which_docker or '(not found)'}")
+    lines.append(f"  PATH docker.exe:  {which_exe or '(not found)'}")
+    sock = Path("/var/run/docker.sock")
+    lines.append(f"  docker.sock:      {'yes' if sock.exists() else 'no'} ({sock})")
+    desktop_hits = []
+    for user in _windows_user_names():
+        for rel in (
+            f"/mnt/c/Users/{user}/AppData/Local/Programs/DockerDesktop/Docker Desktop.exe",
+            f"/mnt/c/Users/{user}/AppData/Local/Programs/Docker/Docker/Docker Desktop.exe",
+        ):
+            if Path(rel).is_file():
+                desktop_hits.append(rel)
+    for rel in (
+        "/mnt/c/Program Files/Docker/Docker/Docker Desktop.exe",
+        "/mnt/c/Program Files (x86)/Docker/Docker/Docker Desktop.exe",
+    ):
+        if Path(rel).is_file():
+            desktop_hits.append(rel)
+    if desktop_hits:
+        lines.append("  Docker Desktop.exe: yes")
+        for hit in desktop_hits[:4]:
+            lines.append(f"    - {hit}")
+    else:
+        lines.append("  Docker Desktop.exe: no (checked Program Files and LocalAppData\\Programs)")
+        lines.append("  tip: per-user installs live under %LOCALAPPDATA%\\Programs\\DockerDesktop")
+    candidates = _docker_candidates()
+    lines.append(f"  candidates:       {len(candidates)}")
+    for path in candidates[:8]:
+        lines.append(f"    - {path}")
+    if candidates:
+        answered = None
+        last_err = ""
+        for path in candidates[:6]:
+            try:
+                done = subprocess.run(  # nosec B603: docker by a path we just found; fixed subcommand
+                    [path, "info", "--format", "{{.ServerVersion}}"],
+                    capture_output=True, text=True, check=False, timeout=8)
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                last_err = str(exc)
+                continue
+            if done.returncode == 0:
+                answered = path
+                lines.append(f"  docker info:      ok via {path}")
+                lines.append(f"                 server {done.stdout.strip() or 'unknown'}")
+                break
+            err = (done.stderr or done.stdout or "").strip().splitlines()
+            if err:
+                last_err = err[0][:200]
+        if answered is None:
+            lines.append("  docker info:      failed for every candidate")
+            if last_err:
+                lines.append(f"    {last_err}")
+            lines.append("  tip: open Docker Desktop and wait until it says Engine running,")
+            lines.append("       then in PowerShell: wsl --shutdown   and reopen this app.")
+    else:
+        lines.append("  docker info:      skipped (no docker binary found)")
+        lines.append("  tip: Docker Desktop Settings -> Resources -> WSL integration:")
+        lines.append("       enable your Ubuntu distro by name (not only 'default'), Apply & Restart,")
+        lines.append("       then: wsl --shutdown   and reopen this app.")
+    return "\n".join(lines)
+
+
+def _docker_answers(path: str) -> bool:
+    """True when this docker binary can talk to a running engine."""
+    try:
+        done = subprocess.run(  # nosec B603: docker by a candidate path; fixed subcommand
+            [path, "info", "--format", "{{.ServerVersion}}"],
+            capture_output=True, check=False, timeout=8)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return done.returncode == 0
+
+
+def docker() -> str:
+    """Prefer a docker that answers; Windows paths on PATH can exist but fail in WSL."""
+    candidates = _docker_candidates()
+    for path in candidates:
+        if _docker_answers(path):
+            return path
+    if candidates:
+        return candidates[0]
+    remedy = (
+        "Install Docker Desktop (or another runtime that runs linux/arm64). "
+        "On Windows: install Docker Desktop, turn on WSL integration for your Ubuntu distro "
+        "(enable the Ubuntu row, not only 'default'), leave Docker Desktop running, "
+        "run `wsl --shutdown` in PowerShell, reopen this app, then try again. "
+        "On an ARM64 computer containers run natively; elsewhere they are emulated and slow."
+    )
+    raise MdkError("E-ENV-DOCKER", "No container runtime found (docker).", remedy)
 
 
 def running() -> bool:
     """Whether the container runtime answers: installed is not running."""
-    done = subprocess.run(  # nosec B603: docker by the full path which() found; a fixed subcommand
-        [docker(), "info", "--format", "{{.ServerVersion}}"], capture_output=True, check=False)
-    return done.returncode == 0
+    try:
+        return _docker_answers(docker())
+    except MdkError:
+        return False
 
 
 def image_exists() -> bool:

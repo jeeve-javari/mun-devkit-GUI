@@ -1,0 +1,57 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
+# Attach a downloadable zip of the Devkit (CLI + optional Friendly GUI app +
+# Windows helpers) when a version tag is pushed. Building games still needs
+# Docker (and on Windows, WSL 2) as docs/gui.md explains. The CLI (./mdk)
+# remains primary; the GUI is an optional developer app entry.
+name: Devkit release package
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build source package
+        run: |
+          set -euo pipefail
+          name="mun-devkit-${GITHUB_REF_NAME:-manual}"
+          mkdir -p dist
+          git archive --format=tar --prefix="${name}/" HEAD | tar -x -C dist
+          # Ensure Unix entry points are marked executable inside the zip.
+          chmod +x "dist/${name}/mdk" "dist/${name}/mdk-gui"
+          (cd dist && zip -r "${name}.zip" "${name}")
+          echo "ASSET=dist/${name}.zip" >> "$GITHUB_ENV"
+          echo "ASSET_NAME=${name}.zip" >> "$GITHUB_ENV"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mun-devkit-zip
+          path: ${{ env.ASSET }}
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ASSET }}
+          generate_release_notes: true
+          body: |
+            Optional downloadable **MUN Devkit** package (full tree: CLI + Friendly GUI).
+
+            The CLI (`./mdk`) remains the primary path. The Friendly GUI is an optional
+            desktop app for the same commands — it does not replace them.
+
+            - **Windows (ARM or x86):** unzip, double-click `MUN Devkit.bat` (or run
+              `scripts/windows/Install-MdkGui.ps1` once). Needs WSL 2 + Docker Desktop to build.
+            - **macOS / Linux:** unzip, run `./mdk-gui` (Python 3.9+ and Tk), or keep using `./mdk`.
+            - Complete **Setup** in the GUI once (`doctor` → `os fetch` → `env build`).
+
+            See `docs/gui.md`. Building for the console still needs a `linux/arm64` container runtime.
+            A Release zip has no `.git`; for later updates, download a newer Release or clone the repo.

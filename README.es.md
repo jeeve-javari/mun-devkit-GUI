@@ -53,7 +53,8 @@ ejecutado en el hardware de una consola.
 | Cliente estático en C (`client/c`): datos de la sesión, restauración y guardado confirmado | Probado contra el simulador y contra partidas guardadas tal como las escribe una consola |
 | Simulador de sesión | Reproduce la disposición de la sesión, el servicio de guardado y cómo termina una sesión; no el sandbox ni ningún dispositivo |
 | Ejemplo `samples/hello-mun` (SDL2, OpenGL, OpenAL; perfil `linux-arm64-gl-v0`) | Compila, pasa las comprobaciones, se empaqueta y se ejecuta en el simulador, dibujando con el renderizador por software de Mesa |
-| Adaptador para Godot (`engines/godot`): GDScript, sin código nativo | Escrito para Godot 4.7 y comprobado con una sola versión exacta, la oficial 4.7.2-stable para Linux ARM64, que `engines/godot/fetch.sh` descarga y verifica. Guarda y restaura contra el simulador; un juego exportado para una consola todavía no es posible ([por qué](engines/godot/README.md)). Otras versiones no se han probado: un informe de una que funcione, o que no, es bienvenido |
+| Adaptador Godot 4.7 (`engines/godot`): GDScript, sin código nativo | Escrito para Godot 4.7 y comprobado con una sola versión exacta, la oficial 4.7.2-stable para Linux ARM64, que `engines/godot/fetch.sh` descarga y verifica. Guarda y restaura contra el simulador; un juego exportado para una consola todavía no es posible ([por qué](engines/godot/README.md)) |
+| Pista Godot 3.5 / FRT (`engines/godot3`) | Adaptador y sonda para Godot **3.5.x** (y tarjetas al estilo FRT) para que los juegos no tengan que pasar a 4.7. El socket de guardado necesita un peer Unix en el motor; el empaquetado en `mdk` aún no está cableado ([engines/godot3](engines/godot3/README.md)) |
 | Otros motores | Nada todavía |
 
 Los perfiles de ejecución son de MUN OS y allí son provisionales: sus
@@ -74,6 +75,36 @@ documentos dicen que solo se han medido en máquinas virtuales.
   nativa.
 
 `./mdk doctor` comprueba cada cosa y dice qué hacer con la que falte.
+
+### Opcional: aplicación Friendly GUI descargable
+
+El **camino principal sigue siendo la CLI** (`./mdk` y el recorrido de abajo).
+Para quien prefiera una ventana de escritorio hay una Friendly GUI
+**opcional** que envuelve los mismos comandos: no sustituye a `mdk`, ni a los
+contratos, ni a la disposición de este repositorio.
+
+**Descarga el paquete** desde las
+[Releases de GitHub](https://github.com/Play-MUN/mun-devkit/releases) (un zip
+del Devkit completo con lanzadores). Descomprime y:
+
+| Plataforma | Abrir la aplicación |
+| --- | --- |
+| Windows (ARM o x86) | Doble clic en **`MUN Devkit.bat`**, o ejecuta una vez `scripts/windows/Install-MdkGui.ps1` |
+| macOS / Linux | `./mdk-gui` (Python 3.9+ con Tk) |
+
+Desde un clon git en lugar del zip de Release:
+
+```sh
+./mdk-gui
+# o
+./mdk gui
+```
+
+Setup, proyecto nuevo, compilar, comprobar, empaquetar y simular llaman a
+`mdk` con los mismos argumentos que la CLI. Compilar para una consola sigue
+necesitando Docker (y en Windows, WSL 2). Detalles:
+[docs/gui.md](docs/gui.md). Un zip de Release no tiene `.git`: para
+actualizar, descarga de nuevo (o usa un clon + **Update…** en la GUI).
 
 ## De nada a una partida guardada
 
@@ -274,15 +305,20 @@ Compila `mun.c` dentro del juego; no hay biblioteca compartida.
 ## Organización
 
 ```
-mdk                    the host tool's entry point
+mdk                    the host tool's entry point (primary)
+mdk-gui                optional friendly desktop front-end (also: mdk gui)
 tools/mdk/             its source (Python, standard library only)
+tools/gui/             the optional desktop front-end (Tk; standard library only)
 tools/env/             the build environment's definition
+scripts/windows/       optional WSL setup and launch helpers for Windows ARM and x86
 client/c/              mun.h, mun.c and the client's test program
 mk/hardening.mk        the options a console program is compiled with
 contracts/profiles/    what mdk checks a build against, per runtime profile
 samples/hello-mun/     the native sample
-samples/hello-mun-godot/   the same small game as a Godot project
-engines/godot/         the Godot adapter, and how to fetch the pinned engine
+samples/hello-mun-godot/   the same small game as a Godot 4.7 project
+samples/hello-mun-godot3/  the same idea for Godot 3.5
+engines/godot/         Godot 4.7 adapter, and how to fetch the pinned engine
+engines/godot3/        Godot 3.5 / FRT adapter and packing notes
 tests/                 host tests; the sample's run in the environment
 mun-os.lock.json       the MUN OS revision the devkit was checked against
 LICENSE, LICENSES/     the licence texts; docs/licensing.md says which covers what
